@@ -139,9 +139,5 @@ logs/
 cache/
 data/sessions.json
 data/sessions.bak.json
-# Keep config.json? Usually yes for defaults, but maybe not if it has local paths.
-# For now, let's ignore it if it's user specific, but the plan says "persistente Benutzer-Einstellungen".
-# Often config.json is ignored and a config.default.json is committed.
-# But for this single user project, let's keep it tracked or ignore it?
-# Let's ignore it to be safe for "local paths".
 data/config.json
+Planungsdokumente/
