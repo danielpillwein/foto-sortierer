@@ -63,7 +63,7 @@ def set_file_times(path, date=None):
     timestamp = date.timestamp()
     os.utime(path, (timestamp, timestamp))
 
-def create_test_data(target_dir, num_files=100, max_depth=3, duplicate_ratio=0.3, soft_duplicate_ratio=0.1):
+def create_test_data(target_dir, num_files=50, max_depth=3, duplicate_ratio=0.3, soft_duplicate_ratio=0.1):
     """
     Creates realistic test data with duplicates.
     
@@ -171,9 +171,9 @@ def create_test_data(target_dir, num_files=100, max_depth=3, duplicate_ratio=0.3
         if (i + 1) % 10 == 0 or (i + 1) == num_files:
             print(f"Progress: {i + 1}/{num_files} files generated...")
 
-    print("\n" + "="*100)
+    print("\n" + "="*50)
     print("Test data generation complete!")
-    print("="*100)
+    print("="*50)
     
     # Print Statistics
     print("\n--- File Type Statistics ---")
@@ -193,7 +193,7 @@ def create_test_data(target_dir, num_files=100, max_depth=3, duplicate_ratio=0.3
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Generate realistic test data for FotoSortierer")
     parser.add_argument("--target", type=str, default="test_data", help="Target directory for test data")
-    parser.add_argument("--count", type=int, default=100, help="Number of files to generate")
+    parser.add_argument("--count", type=int, default=50, help="Number of files to generate")
     parser.add_argument("--duplicates", type=float, default=0.3, help="Ratio of exact duplicates (0.0-1.0)")
     parser.add_argument("--soft-duplicates", type=float, default=0.1, help="Ratio of soft duplicates (0.0-1.0)")
     

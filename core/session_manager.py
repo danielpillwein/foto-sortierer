@@ -1,6 +1,7 @@
 import json
 import logging
 import time
+import os
 from pathlib import Path
 
 class SessionManager:
@@ -110,3 +111,55 @@ class SessionManager:
             session["status"] = "error"
             self.save_sessions()
             raise e
+
+    def move_file(self, session_id, file_path, target_folder):
+        """
+        Moves a file to the target folder and updates session progress.
+        """
+        import shutil
+        
+        session = self.sessions.get(session_id)
+        if not session:
+            return False
+
+        source = Path(file_path)
+        destination = Path(target_folder) / source.name
+        
+        try:
+            # Ensure target directory exists
+            Path(target_folder).mkdir(parents=True, exist_ok=True)
+            
+            # Move file
+            shutil.move(str(source), str(destination))
+            
+            # Update session stats
+            session["processed_files"] = session.get("processed_files", 0) + 1
+            if session.get("total_files", 0) > 0:
+                session["progress"] = int((session["processed_files"] / session["total_files"]) * 100)
+            
+            self.save_sessions()
+            return True
+        except Exception as e:
+            self.logger.error(f"Error moving file {source} to {destination}: {e}")
+            return False
+
+    def delete_file(self, session_id, file_path):
+        """
+        Moves a file to the 'gelöscht_<session_id>' folder.
+        """
+        trash_folder = Path(os.path.expanduser(f"~/Foto-Sortierer/gelöscht_{session_id}"))
+        return self.move_file(session_id, file_path, str(trash_folder))
+
+    def get_session_progress(self, session_id):
+        """
+        Returns a dict with progress stats.
+        """
+        session = self.sessions.get(session_id)
+        if not session:
+            return {}
+        
+        return {
+            "progress": session.get("progress", 0),
+            "processed": session.get("processed_files", 0),
+            "total": session.get("total_files", 0)
+        }

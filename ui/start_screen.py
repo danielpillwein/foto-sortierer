@@ -3,6 +3,9 @@ from PyQt6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel,
 from PyQt6.QtCore import Qt, pyqtSignal, QSize
 from PyQt6.QtGui import QIcon
 from datetime import datetime
+import subprocess
+import os
+from pathlib import Path
 
 class StartScreen(QWidget):
     create_session_clicked = pyqtSignal()
@@ -142,6 +145,24 @@ class StartScreen(QWidget):
         if msg_box.clickedButton() == ja_button:
             if self.session_manager.delete_session(session_id):
                 self.refresh_sessions()
+
+    def open_target_folder(self, session):
+        """Open the target folder for a session in file explorer."""
+        target_path = session.get("target_path")
+        if target_path and Path(target_path).exists():
+            subprocess.run(['explorer', str(target_path)])
+        else:
+            QMessageBox.information(self, "Info", "Zielordner nicht gefunden.")
+    
+    def open_trash_folder(self, session_id):
+        """Open the trash folder for a session in file explorer."""
+        trash_folder = Path(os.path.expanduser(f"~/Foto-Sortierer/gelöscht_{session_id}"))
+        
+        if trash_folder.exists():
+            # Open folder in Windows Explorer
+            subprocess.run(['explorer', str(trash_folder)])
+        else:
+            QMessageBox.information(self, "Info", "Noch keine Dateien gelöscht.")
 
     def create_session_card(self, session):
         card = QFrame()
@@ -289,9 +310,59 @@ class StartScreen(QWidget):
             }
         """)
         
+        # Target folder button
+        target_btn = QPushButton("Ziel")
+        target_btn.setIcon(QIcon("assets/icons/folder.svg"))
+        target_btn.setIconSize(QSize(16, 16))
+        target_btn.setFixedHeight(36)
+        target_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        target_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #1A1A1C;
+                color: #E0E0E0;
+                border: 1px solid #333;
+                border-radius: 4px;
+                font-weight: 500;
+                font-size: 12px;
+                padding: 0 8px;
+            }
+            QPushButton:hover { 
+                background-color: #252527; 
+                border: 1px solid #444;
+            }
+        """)
+        target_btn.setToolTip("Zielordner öffnen")
+        target_btn.clicked.connect(lambda: self.open_target_folder(session))
+        
+        # Deleted files button
+        deleted_btn = QPushButton("Gelöscht")
+        deleted_btn.setIcon(QIcon("assets/icons/archive.svg"))
+        deleted_btn.setIconSize(QSize(16, 16))
+        deleted_btn.setFixedHeight(36)
+        deleted_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        deleted_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #1A1A1C;
+                color: #E0E0E0;
+                border: 1px solid #333;
+                border-radius: 4px;
+                font-weight: 500;
+                font-size: 12px;
+                padding: 0 8px;
+            }
+            QPushButton:hover { 
+                background-color: #252527; 
+                border: 1px solid #444;
+            }
+        """)
+        deleted_btn.setToolTip("Gelöschte Dateien anzeigen")
+        deleted_btn.clicked.connect(lambda: self.open_trash_folder(session["id"]))
+        
         # Add stretch to push buttons to bottom if needed, but layout has stretch above
         action_layout.addWidget(action_btn, 1) # Stretch factor 1 for main button
         action_layout.addWidget(stats_btn)
+        action_layout.addWidget(target_btn)
+        action_layout.addWidget(deleted_btn)
         
         layout.addLayout(action_layout)
         

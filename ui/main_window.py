@@ -4,8 +4,11 @@ from ui.start_screen import StartScreen
 from ui.new_session_screen import NewSessionScreen
 from ui.duplicate_scan_screen import DuplicateScanScreen
 from ui.duplicate_review_screen import DuplicateReviewScreen
+from ui.sorter_view import SorterView
 from core.session_manager import SessionManager
 from core.duplicate_detector import DuplicateDetector
+from core.media_loader import MediaLoader
+from core.exif_manager import ExifManager
 from pathlib import Path
 import glob
 
@@ -110,6 +113,13 @@ class MainWindow(QMainWindow):
         self.duplicate_review_screen.keep_both.connect(self.keep_both_images)
         self.duplicate_review_screen.review_completed.connect(self.complete_duplicate_review)
         self.stack.addWidget(self.duplicate_review_screen)
+        
+        # 5. Sorter View
+        self.media_loader = MediaLoader()
+        self.exif_manager = ExifManager()
+        self.sorter_view = SorterView(self.session_manager, self.media_loader, self.exif_manager)
+        self.sorter_view.close_session_clicked.connect(self.show_start_screen)
+        self.stack.addWidget(self.sorter_view)
 
     def show_start_screen(self):
         self.start_screen.refresh_sessions()
@@ -133,8 +143,8 @@ class MainWindow(QMainWindow):
             if data["detect_duplicates"]:
                 self.start_duplicate_scan(data["source"])
             else:
-                QMessageBox.information(self, "Erfolg", f"Session '{data['name']}' erstellt!")
-                self.show_start_screen()
+                # No duplicate check - go directly to sorter view
+                self.show_sorter_view(session_id)
         except Exception as e:
             QMessageBox.critical(self, "Fehler", f"Konnte Session nicht erstellen: {e}")
     
@@ -257,8 +267,15 @@ class MainWindow(QMainWindow):
     
     def complete_duplicate_review(self):
         """Complete duplicate review process."""
-        QMessageBox.information(self, "Abgeschlossen", "Dublettenprüfung abgeschlossen!")
-        self.show_start_screen()
+        # After duplicate review, go directly to sorter view
+        self.show_sorter_view(self.current_session_id)
 
     def resume_session(self, session_id):
-        QMessageBox.information(self, "Info", f"Session {session_id} wird fortgesetzt (TODO: Sortier-Ansicht)")
+        """Resume a session by opening the sorter view."""
+        self.show_sorter_view(session_id)
+    
+    def show_sorter_view(self, session_id):
+        """Show the sorter view for the given session."""
+        self.current_session_id = session_id
+        self.sorter_view.load_session(session_id)
+        self.stack.setCurrentWidget(self.sorter_view)
