@@ -2,4 +2,6 @@ PyQt6
 Pillow
 piexif
 imagehash
+imagehash
 numpy
+opencv-python

@@ -8,6 +8,9 @@ class ConfigManager:
         "default_destination_path": "",
         "thumbnail_cache_size": 500,
         "dupe_threshold": 5,
+        "threshold_hard": 4,
+        "threshold_soft": 10,
+        "hash_size": 8,
         "theme": "dark",
         "test_data_folder": ""
     }

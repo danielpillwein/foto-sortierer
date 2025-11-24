@@ -391,3 +391,11 @@ class NewSessionScreen(QWidget):
             "detect_duplicates": self.dupe_check.isChecked()
         }
         self.session_created.emit(data)
+    
+    def reset_form(self):
+        """Reset all form fields to empty state."""
+        self.name_input.clear()
+        self.source_input.clear()
+        self.target_input.clear()
+        self.dupe_check.setChecked(False)
+        self.validate_form()

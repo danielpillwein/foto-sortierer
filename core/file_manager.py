@@ -1,6 +1,8 @@
 import os
 import logging
+import time
 from pathlib import Path
+from typing import List, Dict, Any
 
 class FileManager:
     VALID_EXTENSIONS = {
@@ -11,10 +13,10 @@ class FileManager:
     def __init__(self):
         self.logger = logging.getLogger("FotoSortierer.FileManager")
 
-    def scan_directory(self, source_path):
+    def scan_directory(self, source_path: str) -> List[Dict[str, Any]]:
         """
         Recursively scans the directory for valid media files.
-        Returns a list of Path objects.
+        Returns a list of dictionaries containing file metadata.
         """
         path = Path(source_path)
         media_files = []
@@ -23,13 +25,33 @@ class FileManager:
             self.logger.error(f"Invalid source path: {source_path}")
             return []
 
+        self.logger.info(f"Starting recursive scan of {source_path}")
+
         try:
             # Using os.walk for robust recursive scanning
             for root, _, files in os.walk(path):
                 for file in files:
-                    file_path = Path(root) / file
-                    if file_path.suffix.lower() in self.VALID_EXTENSIONS:
-                        media_files.append(file_path)
+                    try:
+                        file_path = Path(root) / file
+                        
+                        # Check extension (case-insensitive)
+                        if file_path.suffix.lower() in self.VALID_EXTENSIONS:
+                            # Get basic metadata
+                            stat = file_path.stat()
+                            
+                            file_info = {
+                                "path": str(file_path),
+                                "size": stat.st_size,
+                                "mtime": stat.st_mtime,
+                                "extension": file_path.suffix.lower(),
+                                "type": "video" if file_path.suffix.lower() in {'.mp4', '.mov', '.avi', '.3gp'} else "image"
+                            }
+                            media_files.append(file_info)
+                            
+                    except (PermissionError, OSError) as e:
+                        self.logger.warning(f"Skipping file {file}: {e}")
+                        continue
+                        
         except PermissionError:
             self.logger.error(f"Permission denied accessing {source_path}")
         except Exception as e:
