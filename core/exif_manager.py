@@ -41,14 +41,26 @@ class ExifManager(MetadataExtractor):
             pass
         return "Unknown"
 
+    def supports_exif(self, file_path):
+        """
+        Check if the file format supports EXIF metadata.
+        Returns True for JPEG, WEBP, and TIFF files.
+        """
+        path = Path(file_path)
+        return path.suffix.lower() in ['.jpg', '.jpeg', '.webp', '.tiff']
+
     def update_metadata(self, file_path, new_data):
         """
         Updates EXIF metadata for the given file.
         new_data: dict with keys 'date_taken' (datetime), 'camera_model' (str)
         """
         path = Path(file_path)
-        if not path.exists() or path.suffix.lower() not in ['.jpg', '.jpeg', '.webp', '.tiff']:
-            self.logger.warning(f"Cannot update EXIF for {file_path}")
+        if not self.supports_exif(file_path):
+            self.logger.warning(f"Cannot update EXIF for {file_path} - format does not support EXIF")
+            return False
+        
+        if not path.exists():
+            self.logger.warning(f"Cannot update EXIF for {file_path} - file does not exist")
             return False
 
         try:

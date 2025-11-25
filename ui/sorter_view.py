@@ -22,6 +22,7 @@ class SorterView(QWidget):
         self.current_file_index = 0
         self.files = []
         self.zoom_level = 1.0
+        self.current_file_supports_exif = False  # Track if current file supports EXIF
         # Connect media loaded signal
         self.media_loader.image_loaded.connect(self.on_media_loaded)
         self.init_ui()
@@ -185,11 +186,31 @@ class SorterView(QWidget):
         
         # Top bar with info and controls
         top_bar = QHBoxLayout()
+        top_bar.setSpacing(8) # Spacing between elements
         
-        # File Info
-        self.file_info_label = QLabel("Keine Datei ausgewählt")
-        self.file_info_label.setStyleSheet("color: #AAA; font-size: 13px;")
-        top_bar.addWidget(self.file_info_label)
+        # File Info Container
+        file_info_widget = QWidget()
+        file_info_layout = QHBoxLayout(file_info_widget)
+        file_info_layout.setContentsMargins(0, 0, 0, 0)
+        file_info_layout.setSpacing(8)
+
+        # Icon
+        self.file_icon_label = QLabel()
+        self.file_icon_label.setFixedSize(20, 20)
+        self.file_icon_label.setStyleSheet("background: transparent; border: none;")
+        file_info_layout.addWidget(self.file_icon_label)
+
+        # Filename (White)
+        self.file_name_label = QLabel("Keine Datei")
+        self.file_name_label.setStyleSheet("color: #E0E0E0; font-size: 13px; font-weight: 600; border: none;")
+        file_info_layout.addWidget(self.file_name_label)
+
+        # Metadata (Gray)
+        self.file_meta_label = QLabel("")
+        self.file_meta_label.setStyleSheet("color: #666; font-size: 13px; border: none;")
+        file_info_layout.addWidget(self.file_meta_label)
+
+        top_bar.addWidget(file_info_widget)
         
         top_bar.addStretch()
         
@@ -487,7 +508,7 @@ class SorterView(QWidget):
         
         # New Folder Text
         nf_text_lbl = QLabel("Neuer Ordner")
-        nf_text_lbl.setStyleSheet("color: white; font-size: 13px; font-weight: 600; border: none; background: transparent;")
+        nf_text_lbl.setStyleSheet("color: #FFFFFF; font-size: 13px; font-weight: 600; border: none; background: transparent;")
         nf_layout.addWidget(nf_text_lbl)
         
         nf_layout.addStretch()
@@ -634,6 +655,10 @@ class SorterView(QWidget):
     # EXIF edit handling (placeholders)
     # ---------------------------------------------------------------------
     def toggle_edit_mode(self):
+        # Don't allow editing if file doesn't support EXIF
+        if not self.current_file_supports_exif:
+            return
+        
         # Toggle edit mode for EXIF fields
         self.is_editing = not self.is_editing
         
@@ -682,6 +707,49 @@ class SorterView(QWidget):
         self.camera_input.setVisible(self.is_editing)
         self.date_input.setVisible(self.is_editing)
         self.time_input.setVisible(self.is_editing)
+
+    def update_edit_button_state(self):
+        """Update the edit button text and style based on EXIF support."""
+        if not self.current_file_supports_exif:
+            # File doesn't support EXIF - disable button
+            self.edit_btn.setText("  Nicht editierbar")
+            self.edit_btn.setEnabled(False)
+            self.edit_btn.setCursor(Qt.CursorShape.ArrowCursor)
+            self.edit_btn.setStyleSheet("""
+                QPushButton { 
+                    background-color: #3A3A3C; 
+                    color: #666; 
+                    border: none; 
+                    padding: 10px; 
+                    border-radius: 6px; 
+                    font-weight: 500; 
+                    font-size: 13px; 
+                }
+            """)
+        else:
+            # File supports EXIF - enable button
+            self.edit_btn.setText("  Infos bearbeiten")
+            self.edit_btn.setEnabled(True)
+            self.edit_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+            
+            # Load and set icon
+            edit_icon_path = Path(__file__).parent.parent / "assets" / "icons" / "edit.svg"
+            if edit_icon_path.exists():
+                self.edit_btn.setIcon(QIcon(str(edit_icon_path)))
+            
+            self.edit_btn.setStyleSheet("""
+                QPushButton { 
+                    background-color: #2D7DFF; 
+                    color: white; 
+                    border: none; 
+                    padding: 10px; 
+                    border-radius: 6px; 
+                    font-weight: 500; 
+                    font-size: 13px; 
+                }
+                QPushButton:hover { background-color: #3B82F6; }
+            """)
+
 
     def save_exif_changes(self):
         """Save EXIF changes from input fields to the current file."""
@@ -739,12 +807,28 @@ class SorterView(QWidget):
         pixmap = QPixmap(file_path)
         self.display_image(pixmap)
         
-        file_name = Path(file_path).name
-        size_mb = Path(file_path).stat().st_size / (1024 * 1024)
+        # Update Icon
+        icon_path = Path(__file__).parent.parent / "assets" / "icons" / "image_blue.svg"
+        if icon_path.exists():
+            self.file_icon_label.setPixmap(QPixmap(str(icon_path)).scaled(20, 20, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation))
         
+        file_name = Path(file_path).name
+        
+        # Truncate filename if > 30 chars
+        display_name = file_name
+        if len(file_name) > 30:
+            display_name = file_name[:27] + "..."
+            
+        self.file_name_label.setText(display_name)
+        
+        size_mb = Path(file_path).stat().st_size / (1024 * 1024)
         dimensions = f"{pixmap.width()}x{pixmap.height()}" if not pixmap.isNull() else "Unknown"
         
-        self.file_info_label.setText(f"{file_name} • {size_mb:.1f} MB • {dimensions}")
+        # Format: • 4.2 MB • 4032x3024
+        self.file_meta_label.setText(f"• {size_mb:.1f} MB • {dimensions}")
+        
+        # Check if file supports EXIF
+        self.current_file_supports_exif = self.exif_manager.supports_exif(file_path)
         
         # Read and display EXIF data
         try:
@@ -770,6 +854,9 @@ class SorterView(QWidget):
             self.camera_value.setText("—")
             self.date_value.setText("—")
             self.time_value.setText("—")
+        
+        # Update edit button state based on EXIF support
+        self.update_edit_button_state()
 
     def delete_current_file(self):
         """Moves the current file to a 'gelöscht_{session_id}' folder in the user's home directory."""
