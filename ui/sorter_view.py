@@ -4,9 +4,10 @@ from PyQt6.QtWidgets import (
     QMessageBox, QInputDialog, QGraphicsScene, QGraphicsView
 )
 from PyQt6.QtCore import Qt, pyqtSignal
-from PyQt6.QtGui import QFont, QPixmap, QIcon, QPainter
+from PyQt6.QtGui import QFont, QPixmap, QIcon, QPainter, QColor
 from pathlib import Path
 import os
+import shutil
 
 class SorterView(QWidget):
     """Main Sorter View Interface - 1:1 Mockup Implementation"""
@@ -394,7 +395,7 @@ class SorterView(QWidget):
         
         self.folder_list_content = QWidget()
         self.folder_list_content.setStyleSheet("background: transparent;")
-        self.folder_list_layout = QVBoxLayout(self.folder_list_content)
+        self.folder_list_layout = QGridLayout(self.folder_list_content)
         self.folder_list_layout.setSpacing(8)
         self.folder_list_layout.setContentsMargins(0, 0, 0, 0)
         self.folder_list_layout.setAlignment(Qt.AlignmentFlag.AlignTop)
@@ -411,69 +412,132 @@ class SorterView(QWidget):
         layout = QVBoxLayout()
         layout.setSpacing(10)
         
-        # Helper to create action buttons
-        def create_action_btn(text, icon_name, color, shortcut, callback):
-            btn = QPushButton()
-            btn.setFixedHeight(44)
-            btn.setCursor(Qt.CursorShape.PointingHandCursor)
-            btn.clicked.connect(callback)
-            
-            # Layout for button content
-            content_layout = QHBoxLayout(btn)
-            content_layout.setContentsMargins(16, 0, 16, 0)
-            content_layout.setSpacing(12)
-            
-            # Icon
-            icon_lbl = QLabel()
-            icon_path = Path(__file__).parent.parent / "assets" / "icons" / icon_name
-            if icon_path.exists():
-                pixmap = QPixmap(str(icon_path))
-                icon_lbl.setPixmap(pixmap.scaled(20, 20, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation))
-            else:
-                icon_lbl.setText("•")
-                icon_lbl.setStyleSheet("color: white; font-size: 16px;")
-            content_layout.addWidget(icon_lbl)
-            
-            # Text
-            text_lbl = QLabel(text)
-            text_lbl.setStyleSheet("color: white; font-size: 13px; font-weight: 500; border: none; background: transparent;")
-            content_layout.addWidget(text_lbl)
-            
-            content_layout.addStretch()
-            
-            # Shortcut Badge
-            badge = QLabel(shortcut)
-            badge.setFixedSize(32, 24)
-            badge.setAlignment(Qt.AlignmentFlag.AlignCenter)
-            badge.setStyleSheet("background-color: rgba(0,0,0,0.3); color: #EEE; border-radius: 4px; font-size: 11px; border: none;")
-            content_layout.addWidget(badge)
-            
-            # Button Style
-            btn.setStyleSheet(f"""
-                QPushButton {{
-                    background-color: {color};
-                    border-radius: 8px;
-                    border: none;
-                    text-align: left;
-                }}
-                QPushButton:hover {{
-                    background-color: {color}DD;
-                }}
-                QPushButton:pressed {{
-                    background-color: {color}AA;
-                }}
-            """)
-            return btn
-
         # Delete button
-        self.delete_btn = create_action_btn("Löschen", "trash.svg", "#D64242", "Del", self.delete_current_file)
+        self.delete_btn = QPushButton()
+        self.delete_btn.setFixedHeight(44)
+        self.delete_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.delete_btn.clicked.connect(self.delete_current_file)
+        
+        delete_layout = QHBoxLayout(self.delete_btn)
+        delete_layout.setContentsMargins(16, 0, 16, 0)
+        delete_layout.setSpacing(12)
+        
+        # Delete Icon
+        del_icon_lbl = QLabel()
+        del_icon_lbl.setStyleSheet("background: transparent; border: none;")
+        del_icon_path = Path(__file__).parent.parent / "assets" / "icons" / "trash.svg"
+        if del_icon_path.exists():
+            pixmap = QPixmap(str(del_icon_path))
+            del_icon_lbl.setPixmap(pixmap.scaled(20, 20, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation))
+        else:
+            del_icon_lbl.setText("🗑️")
+        delete_layout.addWidget(del_icon_lbl)
+        
+        # Delete Text
+        del_text_lbl = QLabel("Löschen")
+        del_text_lbl.setStyleSheet("color: white; font-size: 13px; font-weight: 600; border: none; background: transparent;")
+        delete_layout.addWidget(del_text_lbl)
+        
+        delete_layout.addStretch()
+        
+        # Delete Shortcut Badge
+        del_badge = QLabel("Del")
+        del_badge.setFixedSize(32, 24)
+        del_badge.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        del_badge.setStyleSheet("background-color: #7F1D1D; color: #EEE; border-radius: 4px; font-size: 11px; border: none;")
+        delete_layout.addWidget(del_badge)
+        
+        self.delete_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #EF4444;
+                border-radius: 8px;
+                border: none;
+                text-align: left;
+            }
+            QPushButton:hover {
+                background-color: #DC2626;
+            }
+            QPushButton:pressed {
+                background-color: #B91C1C;
+            }
+        """)
         layout.addWidget(self.delete_btn)
         
         # New folder button
-        self.new_folder_btn = create_action_btn("Neuer Ordner", "folder-plus.svg", "#2D7DFF", "N", self.create_new_folder_dialog)
+        self.new_folder_btn = QPushButton()
+        self.new_folder_btn.setFixedHeight(44)
+        self.new_folder_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.new_folder_btn.clicked.connect(self.create_new_folder_dialog)
+        
+        nf_layout = QHBoxLayout(self.new_folder_btn)
+        nf_layout.setContentsMargins(16, 0, 16, 0)
+        nf_layout.setSpacing(12)
+        # Removed AlignCenter to match Delete button (Left aligned content)
+        
+        # New Folder Icon
+        nf_icon_lbl = QLabel()
+        nf_icon_lbl.setStyleSheet("background: transparent; border: none;")
+        nf_icon_path = Path(__file__).parent.parent / "assets" / "icons" / "folder-plus.svg"
+        if nf_icon_path.exists():
+            pixmap = QPixmap(str(nf_icon_path))
+            nf_icon_lbl.setPixmap(pixmap.scaled(20, 20, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation))
+        else:
+            nf_icon_lbl.setText("➕")
+        nf_layout.addWidget(nf_icon_lbl)
+        
+        # New Folder Text
+        nf_text_lbl = QLabel("Neuer Ordner")
+        nf_text_lbl.setStyleSheet("color: white; font-size: 13px; font-weight: 600; border: none; background: transparent;")
+        nf_layout.addWidget(nf_text_lbl)
+        
+        nf_layout.addStretch()
+        
+        # New Folder Shortcut Badge
+        nf_badge = QLabel("N")
+        nf_badge.setFixedSize(32, 24)
+        nf_badge.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        nf_badge.setStyleSheet("background-color: rgba(0,0,0,0.2); color: #EEE; border-radius: 4px; font-size: 11px; border: none;")
+        nf_layout.addWidget(nf_badge)
+        
+        self.new_folder_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #3B82F6;
+                border-radius: 8px;
+                border: none;
+                text-align: left;
+            }
+            QPushButton:hover {
+                background-color: #2563EB;
+            }
+            QPushButton:pressed {
+                background-color: #1D4ED8;
+            }
+        """)
         layout.addWidget(self.new_folder_btn)
         
         parent_layout.addLayout(layout)
+
+    def colorize_pixmap(self, pixmap, color_hex):
+        """Colorize a pixmap with the given color."""
+        if pixmap.isNull():
+            return pixmap
+        
+        colored_pixmap = QPixmap(pixmap.size())
+        colored_pixmap.fill(Qt.GlobalColor.transparent)
+        
+        painter = QPainter(colored_pixmap)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        painter.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform)
+        
+        # Draw the original pixmap
+        painter.drawPixmap(0, 0, pixmap)
+        
+        # Fill with color using SourceIn composition mode (keeps alpha of original)
+        painter.setCompositionMode(QPainter.CompositionMode.CompositionMode_SourceIn)
+        painter.fillRect(colored_pixmap.rect(), QColor(color_hex))
+        painter.end()
+        
+        return colored_pixmap
 
     def populate_folder_list(self, target_path):
         # Clear existing items
@@ -507,7 +571,9 @@ class SorterView(QWidget):
             icon_path = Path(__file__).parent.parent / "assets" / "icons" / "folder.svg"
             if icon_path.exists():
                  pixmap = QPixmap(str(icon_path))
-                 icon_lbl.setPixmap(pixmap.scaled(16, 16, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation))
+                 # Colorize the icon to #EAB308 (Yellow)
+                 colored_pixmap = self.colorize_pixmap(pixmap, "#EAB308")
+                 icon_lbl.setPixmap(colored_pixmap.scaled(16, 16, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation))
             else:
                  icon_lbl.setText("📁")
             layout.addWidget(icon_lbl)
@@ -523,12 +589,13 @@ class SorterView(QWidget):
             shortcut_lbl = QLabel(str(i + 1))
             shortcut_lbl.setFixedSize(24, 24)
             shortcut_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
-            shortcut_lbl.setStyleSheet("background-color: #333; color: #AAA; border-radius: 4px; font-size: 11px; border: none;")
+            # Updated background color to #374151 as requested
+            shortcut_lbl.setStyleSheet("background-color: #374151; color: #E0E0E0; border-radius: 4px; font-size: 11px; border: none;")
             layout.addWidget(shortcut_lbl)
             
             btn.setStyleSheet("""
                 QPushButton {
-                    background-color: #2A2A2C;
+                    background-color: #0F0F0F;
                     border: 1px solid #333;
                     border-radius: 6px;
                 }
@@ -538,7 +605,10 @@ class SorterView(QWidget):
                 }
             """)
             
-            self.folder_list_layout.addWidget(btn)
+            # Add to grid layout (2 columns)
+            row = i // 2
+            col = i % 2
+            self.folder_list_layout.addWidget(btn, row, col)
 
     # ---------------------------------------------------------------------
     # Image handling and zoom
@@ -702,25 +772,119 @@ class SorterView(QWidget):
             self.time_value.setText("—")
 
     def delete_current_file(self):
-        """Placeholder for deleting the current file.
-        Actual implementation should remove the file and update UI.
-        """
-        # TODO: Implement deletion logic
-        pass
+        """Moves the current file to a 'gelöscht_{session_id}' folder in the user's home directory."""
+        if not self.files or self.current_file_index >= len(self.files):
+            return
+            
+        if not self.current_session_id:
+            return
+            
+        # Use the same logic as DuplicateDetector for the trash folder
+        # ~/Foto-Sortierer/gelöscht_{session_id}
+        deleted_dir = Path(os.path.expanduser(f"~/Foto-Sortierer/gelöscht_{self.current_session_id}"))
+        
+        # Ensure deleted directory exists
+        try:
+            deleted_dir.mkdir(parents=True, exist_ok=True)
+        except Exception as e:
+            QMessageBox.critical(self, "Fehler", f"Konnte Papierkorb-Ordner nicht erstellen:\n{str(e)}")
+            return
+            
+        # Reuse move logic by moving to the deleted folder
+        self.move_current_file(str(deleted_dir))
 
     def create_new_folder_dialog(self):
-        """Placeholder for creating a new folder via dialog.
-        Actual implementation should prompt user and refresh folder list.
-        """
-        # TODO: Implement folder creation dialog
-        pass
+        """Opens a dialog to create a new folder in the target directory."""
+        if not self.current_session_id:
+            return
+            
+        session = self.session_manager.sessions.get(self.current_session_id)
+        if not session:
+            return
+            
+        target_base = Path(session["target_path"])
+        if not target_base.exists():
+            QMessageBox.warning(self, "Fehler", "Zielverzeichnis existiert nicht.")
+            return
+            
+        folder_name, ok = QInputDialog.getText(self, "Neuer Ordner", "Name des neuen Ordners:")
+        
+        if ok and folder_name:
+            # Sanitize folder name (basic)
+            safe_name = "".join(c for c in folder_name if c.isalnum() or c in (' ', '-', '_')).strip()
+            if not safe_name:
+                QMessageBox.warning(self, "Ungültiger Name", "Bitte geben Sie einen gültigen Ordnernamen ein.")
+                return
+                
+            new_folder_path = target_base / safe_name
+            
+            try:
+                if new_folder_path.exists():
+                     QMessageBox.warning(self, "Fehler", "Ein Ordner mit diesem Namen existiert bereits.")
+                     return
+                     
+                new_folder_path.mkdir(parents=True)
+                # Refresh folder list
+                self.populate_folder_list(str(target_base))
+                
+            except Exception as e:
+                QMessageBox.critical(self, "Fehler", f"Fehler beim Erstellen des Ordners:\n{str(e)}")
 
     def move_current_file(self, target_folder: str):
-        """Placeholder for moving the current file to a target folder.
-        Actual implementation should move the file on disk and update UI.
-        """
-        # TODO: Implement file moving logic
-        pass
+        """Moves the current file to the target folder."""
+        if not self.files or self.current_file_index >= len(self.files):
+            return
+            
+        current_file_path = Path(self.files[self.current_file_index])
+        if not current_file_path.exists():
+            QMessageBox.warning(self, "Fehler", "Die Datei existiert nicht mehr.")
+            # Remove from list and refresh
+            self.files.pop(self.current_file_index)
+            self.load_current_file()
+            return
+
+        target_dir = Path(target_folder)
+        if not target_dir.exists():
+            QMessageBox.warning(self, "Fehler", f"Der Zielordner existiert nicht:\n{target_folder}")
+            return
+
+        target_path = target_dir / current_file_path.name
+        
+        # Handle filename collision
+        if target_path.exists():
+            base = target_path.stem
+            suffix = target_path.suffix
+            counter = 1
+            while target_path.exists():
+                target_path = target_dir / f"{base}_{counter}{suffix}"
+                counter += 1
+
+        try:
+            shutil.move(str(current_file_path), str(target_path))
+            
+            # Update internal state
+            self.files.pop(self.current_file_index)
+            
+            # Update session stats
+            if self.current_session_id:
+                session = self.session_manager.sessions.get(self.current_session_id)
+                if session:
+                    session["processed_files"] = session.get("processed_files", 0) + 1
+                    self.session_manager.save_sessions()
+                    
+                    # Update progress bar
+                    total = session.get("total_files", len(self.files) + session["processed_files"])
+                    self.update_progress(session["processed_files"], total)
+            
+            # Load next file (index stays same because we popped the current one)
+            # But if we were at the last item, we need to adjust
+            if self.current_file_index >= len(self.files):
+                self.current_file_index = max(0, len(self.files) - 1)
+                
+            self.load_current_file()
+            
+        except Exception as e:
+            QMessageBox.critical(self, "Fehler", f"Fehler beim Verschieben der Datei:\n{str(e)}")
 
     def load_session(self, session_id):
         """Loads a session and initializes the view with files."""
