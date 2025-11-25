@@ -20,12 +20,15 @@ class ShortcutFolderPanel(QWidget):
     def init_ui(self):
         """Initialize the folder panel UI."""
         main_layout = QVBoxLayout(self)
+        main_layout.setStyleSheet("border: none;")
         main_layout.setContentsMargins(0, 0, 0, 0)
         main_layout.setSpacing(0)
         
         # Create scroll area
         self.scroll = QScrollArea()
+        self.scroll.setStyleSheet("border: none;")
         self.scroll.setWidgetResizable(True)
+        self.scroll.setFrameShape(QScrollArea.Shape.NoFrame)  # Explicitly remove frame
         self.scroll.setStyleSheet("""
             QScrollArea { 
                 background: transparent; 
@@ -43,10 +46,12 @@ class ShortcutFolderPanel(QWidget):
         
         # Create content widget for grid
         self.content_widget = QWidget()
+        self.content_widget.setStyleSheet("border: none;")
         self.content_widget.setStyleSheet("background: transparent;")
         
         # Create grid layout (2 columns)
         self.grid_layout = QGridLayout(self.content_widget)
+        self.grid_layout.setStyleSheet("border: none;")
         self.grid_layout.setSpacing(12)  # Gap between cards
         self.grid_layout.setContentsMargins(0, 0, 0, 0)
         self.grid_layout.setAlignment(Qt.AlignmentFlag.AlignTop)
@@ -161,12 +166,11 @@ class ShortcutFolderPanel(QWidget):
         btn.setStyleSheet("""
             QPushButton {
                 background-color: #0F0F0F;
-                border: 1px solid #333;
+                border: none;
                 border-radius: 6px;
             }
             QPushButton:hover {
                 background-color: #333;
-                border-color: #444;
             }
         """)
         

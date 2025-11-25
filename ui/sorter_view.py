@@ -279,7 +279,7 @@ class SorterView(QWidget):
     def init_sidebar(self):
         self.sidebar = QWidget()
         self.sidebar.setFixedWidth(300)
-        self.sidebar.setStyleSheet("background-color: #1A1A1C; border-left: 1px solid #2A2A2C;")
+        self.sidebar.setStyleSheet("background-color: #1A1A1C; border: none;")
         
         # Main layout for the sidebar
         sidebar_layout = QVBoxLayout(self.sidebar)
@@ -407,16 +407,14 @@ class SorterView(QWidget):
     def init_folder_panel(self, parent_layout):
         """Initialize the breadcrumb-based folder navigation panel."""
         title = QLabel("ZIELORDNER")
-        title.setStyleSheet("color: #888; font-size: 11px; font-weight: bold; letter-spacing: 1px;")
+        title.setStyleSheet("color: #888; font-size: 11px; font-weight: bold; letter-spacing: 1px; border: none;")
         parent_layout.addWidget(title)
         
         # Add breadcrumb bar
         self.breadcrumb_bar = BreadcrumbBar()
         self.breadcrumb_bar.breadcrumb_clicked.connect(self.navigate_to_breadcrumb)
         parent_layout.addWidget(self.breadcrumb_bar)
-        
-        parent_layout.addSpacing(16)
-        
+                
         # Add shortcut folder panel
         self.shortcut_panel = ShortcutFolderPanel()
         self.shortcut_panel.folder_clicked.connect(self.handle_folder_action)
@@ -426,7 +424,7 @@ class SorterView(QWidget):
 
     def init_action_panel(self, parent_layout):
         title = QLabel("AKTIONEN")
-        title.setStyleSheet("color: #888; font-size: 11px; font-weight: bold; letter-spacing: 1px;")
+        title.setStyleSheet("color: #888; font-size: 11px; font-weight: bold; letter-spacing: 1px; border: none;")
         parent_layout.addWidget(title)
         
         layout = QVBoxLayout()

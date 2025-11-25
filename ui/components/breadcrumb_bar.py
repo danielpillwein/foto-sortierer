@@ -20,7 +20,7 @@ class BreadcrumbBar(QWidget):
         """Initialize the breadcrumb bar UI."""
         self.layout = QHBoxLayout(self)
         self.layout.setContentsMargins(0, 0, 0, 0)
-        self.layout.setSpacing(8)
+        self.layout.setSpacing(0)  # No spacing between items
         self.layout.setAlignment(Qt.AlignmentFlag.AlignLeft)
         
         # Set fixed height as per spec
@@ -30,6 +30,13 @@ class BreadcrumbBar(QWidget):
         self.setStyleSheet("""
             BreadcrumbBar {
                 background-color: transparent;
+            }
+            QToolTip {
+                background-color: #2B2B2E;
+                color: #E0E0E0;
+                border: 1px solid #444;
+                padding: 4px;
+                font-size: 13px;
             }
         """)
     
@@ -63,6 +70,7 @@ class BreadcrumbBar(QWidget):
                 color: #666;
                 font-size: 13px;
                 font-weight: 500;
+                padding: 0 4px;
             """)
             self.layout.addWidget(placeholder)
             return
@@ -101,11 +109,10 @@ class BreadcrumbBar(QWidget):
                 ellipsis_label = QLabel(segment)
                 ellipsis_label.setStyleSheet("""
                     QLabel {
-                        background-color: #3A3A3D;
+                        background-color: #2B2B2E;
                         color: #888;
                         border: none;
-                        padding: 4px 12px;
-                        border-radius: 4px;
+                        padding: 4px 8px;
                         font-size: 13px;
                         font-weight: 500;
                     }
@@ -115,18 +122,20 @@ class BreadcrumbBar(QWidget):
                 # Regular clickable segment button
                 segment_btn = QPushButton(segment)
                 segment_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+                segment_btn.setToolTip(segment)  # Show full name on hover
                 segment_btn.setStyleSheet("""
                     QPushButton {
-                        background-color: #3A3A3D;
+                        background-color: #2B2B2E;
                         color: #E0E0E0;
                         border: none;
-                        padding: 4px 12px;
+                        padding: 4px 8px;
                         border-radius: 4px;
                         font-size: 13px;
                         font-weight: 500;
+                        text-align: left;
                     }
                     QPushButton:hover {
-                        background-color: #4A4A4D;
+                        background-color: #3A3A3D;
                         color: #FFFFFF;
                     }
                 """)
@@ -137,11 +146,14 @@ class BreadcrumbBar(QWidget):
             
             # Add arrow separator (except after last segment)
             if i < len(display_segments) - 1:
-                arrow = QLabel(">")
+                arrow = QLabel("›")  # Small arrow
                 arrow.setStyleSheet("""
                     color: #666;
-                    font-size: 13px;
+                    font-size: 16px;
                     font-weight: 300;
+                    padding: 0 2px;
+                    border: none;
+                    background: transparent;
                 """)
                 self.layout.addWidget(arrow)
         
