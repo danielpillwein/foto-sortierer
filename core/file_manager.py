@@ -60,6 +60,31 @@ class FileManager:
         self.logger.info(f"Found {len(media_files)} media files in {source_path}")
         return media_files
 
+    def list_subfolders(self, path: Path) -> List[Path]:
+        """
+        Returns a sorted list of subdirectories in the given path.
+        Only returns direct children, not recursive.
+        
+        Args:
+            path: Path object to scan for subdirectories
+            
+        Returns:
+            List of Path objects representing subdirectories, sorted alphabetically
+        """
+        if not path.exists() or not path.is_dir():
+            self.logger.warning(f"Invalid path for listing subfolders: {path}")
+            return []
+        
+        try:
+            subfolders = [p for p in path.iterdir() if p.is_dir()]
+            return sorted(subfolders, key=lambda p: p.name.lower())
+        except PermissionError:
+            self.logger.error(f"Permission denied accessing {path}")
+            return []
+        except Exception as e:
+            self.logger.error(f"Error listing subfolders in {path}: {e}")
+            return []
+
     def check_permissions(self, path):
         """Checks if read/write permissions exist for a path."""
         path = Path(path)

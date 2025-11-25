@@ -9,6 +9,10 @@ from pathlib import Path
 import os
 import shutil
 
+# Import breadcrumb navigation components
+from ui.components.breadcrumb_bar import BreadcrumbBar
+from ui.components.shortcut_folder_panel import ShortcutFolderPanel
+
 class SorterView(QWidget):
     """Main Sorter View Interface - 1:1 Mockup Implementation"""
     close_session_clicked = pyqtSignal()
@@ -23,6 +27,12 @@ class SorterView(QWidget):
         self.files = []
         self.zoom_level = 1.0
         self.current_file_supports_exif = False  # Track if current file supports EXIF
+        
+        # Navigation state for breadcrumb system
+        self.target_root = None  # Root of target directory
+        self.current_navigation_path = []  # List of Path objects representing breadcrumb path
+        self.current_subfolders = []  # Subfolders at current level
+        
         # Connect media loaded signal
         self.media_loader.image_loaded.connect(self.on_media_loaded)
         self.init_ui()
@@ -48,17 +58,10 @@ class SorterView(QWidget):
             super().keyPressEvent(event)
 
     def move_to_folder_by_index(self, index):
-        if not self.files or not self.current_session_id:
-            return
-        session = self.session_manager.sessions.get(self.current_session_id)
-        if not session:
-            return
-        target_base = Path(session["target_path"])
-        if not target_base.exists():
-            return
-        existing_folders = sorted([p for p in target_base.iterdir() if p.is_dir()])
-        if index < len(existing_folders):
-            self.move_current_file(str(existing_folders[index]))
+        """Handle numeric shortcut (1-9) to navigate or move to folder."""
+        if index < len(self.current_subfolders):
+            folder = self.current_subfolders[index]
+            self.handle_folder_action(folder)
 
     def navigate_file(self, delta):
         if not self.files:
@@ -402,27 +405,23 @@ class SorterView(QWidget):
         parent_layout.addSpacing(10)
 
     def init_folder_panel(self, parent_layout):
+        """Initialize the breadcrumb-based folder navigation panel."""
         title = QLabel("ZIELORDNER")
         title.setStyleSheet("color: #888; font-size: 11px; font-weight: bold; letter-spacing: 1px;")
         parent_layout.addWidget(title)
         
-        scroll = QScrollArea()
-        scroll.setWidgetResizable(True)
-        scroll.setStyleSheet("""
-            QScrollArea { background: transparent; border: none; }
-            QScrollBar:vertical { background: #1A1A1C; width: 8px; }
-            QScrollBar::handle:vertical { background: #333; border-radius: 4px; }
-        """)
+        # Add breadcrumb bar
+        self.breadcrumb_bar = BreadcrumbBar()
+        self.breadcrumb_bar.breadcrumb_clicked.connect(self.navigate_to_breadcrumb)
+        parent_layout.addWidget(self.breadcrumb_bar)
         
-        self.folder_list_content = QWidget()
-        self.folder_list_content.setStyleSheet("background: transparent;")
-        self.folder_list_layout = QGridLayout(self.folder_list_content)
-        self.folder_list_layout.setSpacing(8)
-        self.folder_list_layout.setContentsMargins(0, 0, 0, 0)
-        self.folder_list_layout.setAlignment(Qt.AlignmentFlag.AlignTop)
+        parent_layout.addSpacing(16)
         
-        scroll.setWidget(self.folder_list_content)
-        parent_layout.addWidget(scroll, 1) # Stretch factor 1 to take remaining space
+        # Add shortcut folder panel
+        self.shortcut_panel = ShortcutFolderPanel()
+        self.shortcut_panel.folder_clicked.connect(self.handle_folder_action)
+        parent_layout.addWidget(self.shortcut_panel, 1)  # Stretch factor 1 to take remaining space
+        
         parent_layout.addSpacing(10)
 
     def init_action_panel(self, parent_layout):
@@ -560,76 +559,68 @@ class SorterView(QWidget):
         
         return colored_pixmap
 
-    def populate_folder_list(self, target_path):
-        # Clear existing items
-        while self.folder_list_layout.count():
-            item = self.folder_list_layout.takeAt(0)
-            if item.widget():
-                item.widget().deleteLater()
+    # ---------------------------------------------------------------------
+    # Breadcrumb Navigation Methods
+    # ---------------------------------------------------------------------
+    def handle_folder_action(self, folder: Path):
+        """
+        Decide whether to navigate into folder or move file.
+        If folder has subfolders, navigate. Otherwise, move file.
+        """
+        from core.file_manager import FileManager
+        file_manager = FileManager()
+        subfolders = file_manager.list_subfolders(folder)
         
-        target_base = Path(target_path)
-        if not target_base.exists():
+        if subfolders:
+            # Folder has subfolders - navigate deeper
+            self.navigate_to_folder(folder)
+        else:
+            # Leaf folder - move file here
+            self.move_current_file(str(folder))
+    
+    def navigate_to_folder(self, folder: Path):
+        """Navigate into a subfolder - updates breadcrumb and panel."""
+        self.current_navigation_path.append(folder)
+        self.update_navigation_ui()
+    
+    def navigate_to_breadcrumb(self, index: int):
+        """Navigate back to a breadcrumb level."""
+        # Index 0 is the target root
+        if index == 0:
+            # Navigate back to root
+            self.current_navigation_path = []
+        else:
+            # Navigate to specific level (index-1 because root is index 0)
+            self.current_navigation_path = self.current_navigation_path[:index]
+        self.update_navigation_ui()
+    
+    def update_navigation_ui(self):
+        """Refresh breadcrumb and folder panel based on current navigation state."""
+        if not self.target_root:
             return
-
-        # Get subdirectories
-        folders = sorted([p for p in target_base.iterdir() if p.is_dir()])
         
-        for i, folder in enumerate(folders):
-            if i >= 9: break # Limit to 9 shortcuts
-            
-            btn = QPushButton()
-            btn.setFixedHeight(40)
-            btn.setCursor(Qt.CursorShape.PointingHandCursor)
-            # Use a lambda that captures the current folder path
-            btn.clicked.connect(lambda checked, p=str(folder): self.move_current_file(p))
-            
-            layout = QHBoxLayout(btn)
-            layout.setContentsMargins(12, 0, 12, 0)
-            layout.setSpacing(10)
-            
-            # Icon
-            icon_lbl = QLabel()
-            icon_path = Path(__file__).parent.parent / "assets" / "icons" / "folder.svg"
-            if icon_path.exists():
-                 pixmap = QPixmap(str(icon_path))
-                 # Colorize the icon to #EAB308 (Yellow)
-                 colored_pixmap = self.colorize_pixmap(pixmap, "#EAB308")
-                 icon_lbl.setPixmap(colored_pixmap.scaled(16, 16, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation))
-            else:
-                 icon_lbl.setText("📁")
-            layout.addWidget(icon_lbl)
-            
-            # Name
-            name_lbl = QLabel(folder.name)
-            name_lbl.setStyleSheet("color: #E0E0E0; font-size: 13px; border: none; background: transparent;")
-            layout.addWidget(name_lbl)
-            
-            layout.addStretch()
-            
-            # Shortcut
-            shortcut_lbl = QLabel(str(i + 1))
-            shortcut_lbl.setFixedSize(24, 24)
-            shortcut_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
-            # Updated background color to #374151 as requested
-            shortcut_lbl.setStyleSheet("background-color: #374151; color: #E0E0E0; border-radius: 4px; font-size: 11px; border: none;")
-            layout.addWidget(shortcut_lbl)
-            
-            btn.setStyleSheet("""
-                QPushButton {
-                    background-color: #0F0F0F;
-                    border: 1px solid #333;
-                    border-radius: 6px;
-                }
-                QPushButton:hover {
-                    background-color: #333;
-                    border-color: #444;
-                }
-            """)
-            
-            # Add to grid layout (2 columns)
-            row = i // 2
-            col = i % 2
-            self.folder_list_layout.addWidget(btn, row, col)
+        # Determine current folder
+        if self.current_navigation_path:
+            current_folder = self.current_navigation_path[-1]
+        else:
+            current_folder = self.target_root
+        
+        # Build breadcrumb segments - ALWAYS start with target root
+        segments = [self.target_root.name]
+        
+        # Add navigation path segments (if any)
+        if self.current_navigation_path:
+            segments.extend([p.name for p in self.current_navigation_path])
+        
+        self.breadcrumb_bar.set_path(segments)
+        
+        # Update subfolders list
+        from core.file_manager import FileManager
+        file_manager = FileManager()
+        self.current_subfolders = file_manager.list_subfolders(current_folder)
+        
+        # Update shortcut panel
+        self.shortcut_panel.set_folders(self.current_subfolders)
 
     # ---------------------------------------------------------------------
     # Image handling and zoom
@@ -912,7 +903,7 @@ class SorterView(QWidget):
                      
                 new_folder_path.mkdir(parents=True)
                 # Refresh folder list
-                self.populate_folder_list(str(target_base))
+                self.update_navigation_ui()
                 
             except Exception as e:
                 QMessageBox.critical(self, "Fehler", f"Fehler beim Erstellen des Ordners:\n{str(e)}")
@@ -993,8 +984,10 @@ class SorterView(QWidget):
             session["total_files"] = len(self.files)
             self.session_manager.save_sessions()
         
-        # Populate folder list
-        self.populate_folder_list(session["target_path"])
+        # Initialize navigation state
+        self.target_root = Path(session["target_path"])
+        self.current_navigation_path = []  # Start at root
+        self.update_navigation_ui()
         
         # Update progress
         total = session.get("total_files", len(self.files))
