@@ -190,7 +190,7 @@ class DuplicateDetector:
                     # All files have same size -> True exact duplicates -> Auto-delete all but one
                     self._auto_delete_group(paths, file_map, session_id, deleted_files)
                     if progress_callback:
-                        progress_callback(total_files, total_files, len(deleted_files), len(soft_duplicate_pairs), "Lösche exakte Dubletten...")
+                        progress_callback(total_files, total_files, len(deleted_files), len(soft_duplicate_pairs), "Lösche exakte Duplikate...")
                 else:
                     # Mixed sizes -> We have both exact duplicates AND soft duplicates
                     self.logger.info(f"Found mixed size group with hash {h}: {len(size_groups)} different sizes")
@@ -217,7 +217,7 @@ class DuplicateDetector:
                                 self.logger.info(f"Created soft duplicate pair: {pair}")
                     
                     if progress_callback:
-                        progress_callback(total_files, total_files, len(deleted_files), len(soft_duplicate_pairs), "Gefundene Soft-Dubletten...")
+                        progress_callback(total_files, total_files, len(deleted_files), len(soft_duplicate_pairs), "Gefundene Soft-Duplikate...")
 
         # Update progress with deleted count
         if progress_callback:
@@ -299,7 +299,7 @@ class DuplicateDetector:
                     self._auto_delete_group(group, file_map, session_id, deleted_files)
                     # Update progress after each hard duplicate group deletion
                     if progress_callback:
-                        progress_callback(total_files, total_files, len(deleted_files), len(soft_duplicate_pairs), "Lösche ähnliche Dubletten...")
+                        progress_callback(total_files, total_files, len(deleted_files), len(soft_duplicate_pairs), "Lösche ähnliche Duplikate...")
 
         # Filter soft pairs (from hamming distance)
         real_soft_pairs = []

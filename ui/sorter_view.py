@@ -3,7 +3,7 @@ from PyQt6.QtWidgets import (
     QScrollArea, QSplitter, QProgressBar, QLineEdit, QGridLayout,
     QMessageBox, QInputDialog, QGraphicsScene, QGraphicsView
 )
-from PyQt6.QtCore import Qt, pyqtSignal
+from PyQt6.QtCore import Qt, pyqtSignal, QRectF
 from PyQt6.QtGui import QFont, QPixmap, QIcon, QPainter, QColor
 from pathlib import Path
 import os
@@ -268,9 +268,12 @@ class SorterView(QWidget):
         self.view.setStyleSheet("background: transparent; border: none;")
         self.view.setRenderHint(QPainter.RenderHint.Antialiasing)
         self.view.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform)
-        self.view.setDragMode(QGraphicsView.DragMode.ScrollHandDrag)
+        self.view.setDragMode(QGraphicsView.DragMode.NoDrag)
         self.view.setTransformationAnchor(QGraphicsView.ViewportAnchor.AnchorUnderMouse)
         self.view.setResizeAnchor(QGraphicsView.ViewportAnchor.AnchorUnderMouse)
+        self.view.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.view.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self.view.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         
         layout.addWidget(self.view)
         
@@ -627,18 +630,50 @@ class SorterView(QWidget):
         self.scene.clear()
         if pixmap and not pixmap.isNull():
             self.scene.addPixmap(pixmap)
-            self.view.fitInView(self.scene.itemsBoundingRect(), Qt.AspectRatioMode.KeepAspectRatio)
+            self.scene.setSceneRect(QRectF(pixmap.rect())) # Explicitly set scene rect
+            
+            # Reset zoom and scrollbars for new image
+            self.zoom_level = 1.0
+            self.view.resetTransform()
+            self.view.setDragMode(QGraphicsView.DragMode.NoDrag)
+            self.view.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+            self.view.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+            
+            self.view.fitInView(self.scene.sceneRect(), Qt.AspectRatioMode.KeepAspectRatio)
+            self.view.centerOn(self.scene.sceneRect().center())
         else:
             self.scene.addText("No Image", QFont("Arial", 20)).setDefaultTextColor(Qt.GlobalColor.gray)
 
     def zoom_in(self):
         self.view.scale(1.2, 1.2)
         self.zoom_level *= 1.2
+        
+        # Enable scrollbars and drag if zoomed in
+        if self.zoom_level > 1.0:
+            self.view.setDragMode(QGraphicsView.DragMode.ScrollHandDrag)
+            self.view.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+            self.view.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
 
     def zoom_out(self):
         if self.zoom_level > 1.0:
             self.view.scale(1/1.2, 1/1.2)
             self.zoom_level /= 1.2
+            
+            # Disable scrollbars, drag and fit if back to original or smaller
+            if self.zoom_level <= 1.01: # Use small epsilon for float comparison
+                self.zoom_level = 1.0
+                self.view.resetTransform()
+                self.view.setDragMode(QGraphicsView.DragMode.NoDrag)
+                self.view.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+                self.view.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+                self.view.fitInView(self.scene.itemsBoundingRect(), Qt.AspectRatioMode.KeepAspectRatio)
+
+    def resizeEvent(self, event):
+        """Handle resize events to maintain Best Fit."""
+        super().resizeEvent(event)
+        if self.zoom_level == 1.0 and hasattr(self, 'view') and hasattr(self, 'scene') and self.scene.items():
+            self.view.fitInView(self.scene.sceneRect(), Qt.AspectRatioMode.KeepAspectRatio)
+            self.view.centerOn(self.scene.sceneRect().center())
 
     # ---------------------------------------------------------------------
     # EXIF edit handling (placeholders)
@@ -1011,7 +1046,7 @@ class SorterView(QWidget):
         """Load and display the current file based on self.current_file_index."""
         if not self.files:
             self.display_image(None)
-            self.file_info_label.setText("Keine Dateien vorhanden")
+            self.file_name_label.setText("Keine Dateien vorhanden")
             return
             
         if 0 <= self.current_file_index < len(self.files):

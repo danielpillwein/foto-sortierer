@@ -74,10 +74,34 @@ class StartScreen(QWidget):
     def refresh_sessions(self):
         # Clear existing items
         for i in reversed(range(self.scroll_layout.count())): 
-            self.scroll_layout.itemAt(i).widget().setParent(None)
+            item = self.scroll_layout.itemAt(i)
+            if item.widget():
+                item.widget().setParent(None)
 
         sessions = self.session_manager.get_all_sessions()
         
+        if not sessions:
+            # Center the layout for empty state
+            self.scroll_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            
+            # Show empty state message
+            empty_label = QLabel("Noch keine Session vorhanden.\nErstelle eine neue Session oben rechts.")
+            empty_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            empty_label.setStyleSheet("""
+                QLabel {
+                    color: #666;
+                    font-size: 16px;
+                    font-weight: 500;
+                    padding: 40px;
+                }
+            """)
+            # Add to grid, spanning 3 columns
+            self.scroll_layout.addWidget(empty_label, 0, 0, 1, 3)
+            return
+
+        # Reset alignment for grid view
+        self.scroll_layout.setAlignment(Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignLeft)
+
         row = 0
         col = 0
         max_cols = 3
@@ -149,10 +173,13 @@ class StartScreen(QWidget):
     def open_target_folder(self, session):
         """Open the target folder for a session in file explorer."""
         target_path = session.get("target_path")
-        if target_path and Path(target_path).exists():
-            subprocess.run(['explorer', str(target_path)])
-        else:
-            QMessageBox.information(self, "Info", "Zielordner nicht gefunden.")
+        if target_path and str(target_path).strip():
+            path_obj = Path(target_path).resolve()
+            if path_obj.exists():
+                subprocess.run(['explorer', str(path_obj)])
+                return
+        
+        QMessageBox.information(self, "Info", "Zielordner nicht gefunden.")
     
     def open_trash_folder(self, session_id):
         """Open the trash folder for a session in file explorer."""
@@ -237,7 +264,14 @@ class StartScreen(QWidget):
         prog_icon.setPixmap(QIcon("assets/icons/chart.svg").pixmap(16, 16))
         prog_icon.setStyleSheet("border: none; background: transparent;")
         
-        progress_val = session.get('progress', 0)
+        # Calculate progress from processed/total
+        total_files = session.get('total_files', 0)
+        processed_files = session.get('processed_files', 0)
+        if total_files > 0:
+            progress_val = int((processed_files / total_files) * 100)
+        else:
+            progress_val = 0
+            
         prog_text = QLabel(f"{progress_val}% sortiert")
         prog_text.setStyleSheet("color: #AAAAAA; font-size: 13px; font-weight: 500; border: none; background: transparent;")
         
@@ -312,7 +346,7 @@ class StartScreen(QWidget):
         
         # Target folder button
         target_btn = QPushButton("Ziel")
-        target_btn.setIcon(QIcon("assets/icons/folder.svg"))
+        target_btn.setIcon(QIcon("assets/icons/folder_outline.svg"))
         target_btn.setIconSize(QSize(16, 16))
         target_btn.setFixedHeight(36)
         target_btn.setCursor(Qt.CursorShape.PointingHandCursor)

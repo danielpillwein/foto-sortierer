@@ -1,8 +1,9 @@
 from PyQt6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel, 
                              QPushButton, QProgressBar, QFrame)
-from PyQt6.QtCore import Qt, pyqtSignal
+from PyQt6.QtCore import Qt, pyqtSignal, QTimer, QTime
 from PyQt6.QtGui import QIcon
 from pathlib import Path
+import time
 
 class DuplicateScanScreen(QWidget):
     scan_completed = pyqtSignal(list)
@@ -13,6 +14,14 @@ class DuplicateScanScreen(QWidget):
         super().__init__()
         self.is_complete = False
         self.total_files = 0
+        self.current_progress = 0
+        self.start_time = None
+        self.elapsed_seconds = 0
+        
+        # Timer for updating elapsed time
+        self.timer = QTimer(self)
+        self.timer.timeout.connect(self.update_timer)
+        
         self.load_stylesheet()
         self.init_ui()
         
@@ -23,13 +32,15 @@ class DuplicateScanScreen(QWidget):
                 self.setStyleSheet(f.read())
     
     def init_ui(self):
-        # Main layout - full screen dark background
+        # Main layout - pure black background (#000000)
+        self.setStyleSheet("background-color: #000000;")
+        
         main_layout = QVBoxLayout(self)
         main_layout.setContentsMargins(0, 0, 0, 0)
         main_layout.setSpacing(0)
         main_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
         
-        # Center container
+        # Center container (unchanged styling)
         center_container = QWidget()
         center_container.setFixedSize(800, 520)
         center_container.setStyleSheet("""
@@ -41,8 +52,8 @@ class DuplicateScanScreen(QWidget):
         """)
         
         center_layout = QVBoxLayout(center_container)
-        center_layout.setContentsMargins(60, 60, 60, 60)
-        center_layout.setSpacing(25)
+        center_layout.setContentsMargins(50, 40, 50, 40)
+        center_layout.setSpacing(15)
         center_layout.setAlignment(Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignHCenter)
         
         # Search icon
@@ -68,7 +79,7 @@ class DuplicateScanScreen(QWidget):
         center_layout.addWidget(icon_container, alignment=Qt.AlignmentFlag.AlignHCenter)
         
         # Title
-        scan_title = QLabel("Dubletten werden gesucht")
+        scan_title = QLabel("Duplikate werden gesucht")
         scan_title.setStyleSheet("font-size: 22px; font-weight: bold; color: #FFFFFF; border: none; background: transparent;")
         scan_title.setAlignment(Qt.AlignmentFlag.AlignCenter)
         center_layout.addWidget(scan_title)
@@ -79,7 +90,7 @@ class DuplicateScanScreen(QWidget):
         scan_subtitle.setAlignment(Qt.AlignmentFlag.AlignCenter)
         center_layout.addWidget(scan_subtitle)
         
-        center_layout.addSpacing(15)
+        center_layout.addSpacing(10)
         
         # Progress section
         progress_container = QVBoxLayout()
@@ -118,31 +129,35 @@ class DuplicateScanScreen(QWidget):
         
         center_layout.addLayout(progress_container)
         
-        center_layout.addSpacing(15)
+        center_layout.addSpacing(10)
         
-        # Stats cards
+        # Time display (Laufzeit | Verbleibend) - above stats
+        self.time_display = QLabel("Laufzeit: 00:00:00   |   Verbleibend: ~0:00")
+        self.time_display.setStyleSheet("font-size: 14px; font-weight: bold; color: #CCCCCC; border: none; background: transparent;")
+        self.time_display.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        center_layout.addWidget(self.time_display)
+        
+        center_layout.addSpacing(5)
+        
+        # Stats row - transparent background, no borders
         stats_row = QHBoxLayout()
         stats_row.setSpacing(20)
         
-        # Total files card
-        self.total_card = self.create_stat_card("0", "Dateien gesamt")
+        # Total files stat
+        self.total_card = self.create_stat_item("0", "Dateien gesamt")
         stats_row.addWidget(self.total_card)
         
-        # Deleted duplicates card
-        self.deleted_card = self.create_stat_card("0", "Gelöschte Dubletten", highlight=True)
+        # Deleted duplicates stat
+        self.deleted_card = self.create_stat_item("0", "Gelöschte Duplikate", highlight=True)
         stats_row.addWidget(self.deleted_card)
         
-        # Review duplicates card
-        self.review_card = self.create_stat_card("0", "Zu prüfen", highlight=True)
+        # Review duplicates stat
+        self.review_card = self.create_stat_item("0", "Zu prüfen", highlight=True)
         stats_row.addWidget(self.review_card)
-        
-        # Time remaining card
-        self.time_card = self.create_stat_card("~0:00", "Verbleibende Zeit")
-        stats_row.addWidget(self.time_card)
         
         center_layout.addLayout(stats_row)
         
-        center_layout.addSpacing(15)
+        center_layout.addSpacing(10)
         
         # Action button
         self.action_btn = QPushButton("Scan abbrechen")
@@ -167,43 +182,39 @@ class DuplicateScanScreen(QWidget):
         
         main_layout.addWidget(center_container)
     
-    def create_stat_card(self, value, label, highlight=False):
-        """Create a stat card widget."""
-        card = QFrame()
-        card.setFixedSize(180, 85) # Slightly smaller to fit 4 cards
-        card.setStyleSheet("""
-            QFrame {
-                background-color: #0E0E0F;
-                border-radius: 8px;
-                border: 1px solid #2A2A2C;
-            }
-        """)
+    def create_stat_item(self, value, label, highlight=False):
+        """Create a stat item widget (no border, no background)."""
+        item = QWidget()
+        item.setStyleSheet("background: transparent; border: none;")
         
-        card_layout = QVBoxLayout(card)
-        card_layout.setContentsMargins(10, 10, 10, 10)
-        card_layout.setSpacing(4)
-        card_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        item_layout = QVBoxLayout(item)
+        item_layout.setContentsMargins(0, 0, 0, 0)
+        item_layout.setSpacing(4)
+        item_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
         
         value_label = QLabel(value)
         value_color = "#2D7DFF" if highlight else "#FFFFFF"
-        value_label.setStyleSheet(f"font-size: 24px; font-weight: bold; color: {value_color}; border: none; background: transparent;")
+        value_label.setStyleSheet(f"font-size: 28px; font-weight: 800; color: {value_color}; border: none; background: transparent;")
         value_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         
         text_label = QLabel(label)
-        text_label.setStyleSheet("font-size: 11px; color: #888888; border: none; background: transparent;")
+        text_label.setStyleSheet("font-size: 12px; font-weight: 500; color: #999999; border: none; background: transparent;")
         text_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         
-        card_layout.addWidget(value_label)
-        card_layout.addWidget(text_label)
+        item_layout.addWidget(value_label)
+        item_layout.addWidget(text_label)
         
         # Store references for updates
-        card.value_label = value_label
-        card.text_label = text_label
+        item.value_label = value_label
+        item.text_label = text_label
         
-        return card
+        return item
     
     def update_progress(self, current: int, total: int, deleted: int = 0, to_review: int = 0, status: str = ""):
         """Update progress display."""
+        self.current_progress = current
+        self.total_files = total
+        
         if total > 0:
             progress = int((current / total) * 100)
             self.progress_bar.setValue(progress)
@@ -213,39 +224,89 @@ class DuplicateScanScreen(QWidget):
             self.deleted_card.value_label.setText(f"{deleted:,}")
             self.review_card.value_label.setText(f"{to_review:,}")
             
-            # Estimate remaining time
-            if current > 0 and current < total:
-                avg_time_per_file = 0.1
-                remaining = total - current
-                remaining_seconds = int(remaining * avg_time_per_file)
-                minutes = remaining_seconds // 60
-                seconds = remaining_seconds % 60
-                self.time_card.value_label.setText(f"~{minutes}:{seconds:02d}")
+            # Update time display
+            self.update_time_display()
+            
+            # Check if complete
+            if progress >= 100:
+                self.set_complete()
     
     def set_total_files(self, total: int):
         """Set total number of files."""
         self.total_files = total
         self.total_card.value_label.setText(f"{total:,}")
     
+    def start_timer(self):
+        """Start the elapsed time timer."""
+        self.start_time = time.time()
+        self.elapsed_seconds = 0
+        self.timer.start(1000)  # Update every second
+    
+    def update_timer(self):
+        """Update elapsed time every second."""
+        if self.start_time and not self.is_complete:
+            self.elapsed_seconds = int(time.time() - self.start_time)
+            self.update_time_display()
+    
+    def update_time_display(self):
+        """Update the time display with elapsed and remaining time."""
+        # Format elapsed time as HH:MM:SS
+        hours = self.elapsed_seconds // 3600
+        minutes = (self.elapsed_seconds % 3600) // 60
+        seconds = self.elapsed_seconds % 60
+        elapsed_str = f"{hours:02d}:{minutes:02d}:{seconds:02d}"
+        
+        # Calculate remaining time
+        if self.current_progress > 0 and self.current_progress < self.total_files and self.elapsed_seconds > 0:
+            avg_time_per_file = self.elapsed_seconds / self.current_progress
+            remaining = self.total_files - self.current_progress
+            remaining_seconds = int(remaining * avg_time_per_file)
+            remaining_minutes = remaining_seconds // 60
+            remaining_secs = remaining_seconds % 60
+            remaining_str = f"~{remaining_minutes}:{remaining_secs:02d}"
+            
+            self.time_display.setText(f"Laufzeit: {elapsed_str}   |   Verbleibend: {remaining_str}")
+        else:
+            # When complete or just started
+            if self.is_complete:
+                self.time_display.setText(f"Laufzeit: {elapsed_str}")
+            else:
+                self.time_display.setText(f"Laufzeit: {elapsed_str}   |   Verbleibend: ~0:00")
+    
     def set_complete(self):
         """Mark scan as complete and show continue button."""
-        self.is_complete = True
-        self.progress_bar.setValue(100)
-        self.progress_percent.setText("100%")
-        self.action_btn.setText("Weiter")
-        self.action_btn.setStyleSheet("""
-            QPushButton {
-                background-color: #2D7DFF;
-                color: white;
-                border: none;
-                border-radius: 6px;
-                font-weight: bold;
-                font-size: 14px;
-            }
-            QPushButton:hover {
-                background-color: #3B82F6;
-            }
-        """)
+        if not self.is_complete:  # Only execute once
+            self.is_complete = True
+            
+            # Update elapsed time one last time
+            if self.start_time:
+                self.elapsed_seconds = int(time.time() - self.start_time)
+            
+            self.timer.stop()  # Stop the timer
+            self.progress_bar.setValue(100)
+            self.progress_percent.setText("100%")
+            
+            # Update time display to show only elapsed time
+            hours = self.elapsed_seconds // 3600
+            minutes = (self.elapsed_seconds % 3600) // 60
+            seconds = self.elapsed_seconds % 60
+            elapsed_str = f"{hours:02d}:{minutes:02d}:{seconds:02d}"
+            self.time_display.setText(f"Laufzeit: {elapsed_str}")
+            
+            self.action_btn.setText("Weiter")
+            self.action_btn.setStyleSheet("""
+                QPushButton {
+                    background-color: #2D7DFF;
+                    color: white;
+                    border: none;
+                    border-radius: 6px;
+                    font-weight: bold;
+                    font-size: 14px;
+                }
+                QPushButton:hover {
+                    background-color: #3B82F6;
+                }
+            """)
     
     def on_action_clicked(self):
         """Handle action button click."""

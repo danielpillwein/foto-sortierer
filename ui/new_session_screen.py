@@ -115,7 +115,7 @@ class NewSessionScreen(QWidget):
         self.name_input.textChanged.connect(self.validate_form)
         self.add_input_group(card_layout, "Sitzungsname", "Der Name dieser Session, unter dem Fortschritt und Einstellungen gespeichert werden.", self.name_input)
 
-        # 4. Dublettenerkennung
+        # 4. Duplikaterkennung
         card_layout.addSpacing(10)
         dupe_row = QHBoxLayout()
         dupe_row.setSpacing(15)
@@ -141,9 +141,9 @@ class NewSessionScreen(QWidget):
         
         dupe_text_layout = QVBoxLayout()
         dupe_text_layout.setSpacing(6) # Increased spacing as requested
-        dupe_label = QLabel("Dublettenerkennung aktivieren")
+        dupe_label = QLabel("Duplikaterkennung aktivieren")
         dupe_label.setStyleSheet("color: #FFF; font-weight: bold; font-size: 14px; border: none; background: transparent;")
-        dupe_desc = QLabel("Wenn aktiviert, führt FotoSortierer vor dem Start des Sortiervorgangs einen Dubletten-Scan durch.")
+        dupe_desc = QLabel("Wenn aktiviert, führt FotoSortierer vor dem Start des Sortiervorgangs einen Duplikate-Scan durch.")
         dupe_desc.setStyleSheet("color: #888; font-size: 12px; border: none; background: transparent;")
         dupe_desc.setWordWrap(True)
         

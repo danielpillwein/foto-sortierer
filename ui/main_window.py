@@ -1,5 +1,5 @@
 from PyQt6.QtWidgets import QMainWindow, QMessageBox, QStackedWidget
-from PyQt6.QtCore import QThread, pyqtSignal
+from PyQt6.QtCore import QThread, pyqtSignal, QTimer
 from ui.start_screen import StartScreen
 from ui.new_session_screen import NewSessionScreen
 from ui.duplicate_scan_screen import DuplicateScanScreen
@@ -66,6 +66,7 @@ class MainWindow(QMainWindow):
         # State
         self.current_session_id = None
         self.duplicate_pairs = []
+        self.total_duplicate_pairs = 0
         self.current_pair_index = 0
         self.scan_thread = None
         
@@ -160,10 +161,14 @@ class MainWindow(QMainWindow):
         
         self.duplicate_scan_screen.set_total_files(total_files)
         
-        # Reset UI
+        # Reset UI and state
+        self.duplicate_scan_screen.is_complete = False
         self.duplicate_scan_screen.progress_bar.setValue(0)
         self.duplicate_scan_screen.progress_percent.setText("0%")
         self.duplicate_scan_screen.action_btn.setText("Scan abbrechen")
+        
+        # Start the timer
+        self.duplicate_scan_screen.start_timer()
         
         # Create and start scan thread
         self.scan_thread = DuplicateScanThread(source_path, self.duplicate_detector, self.current_session_id)
@@ -182,6 +187,7 @@ class MainWindow(QMainWindow):
     def on_scan_complete(self, soft_duplicates):
         """Handle completion of duplicate scan."""
         self.duplicate_pairs = soft_duplicates
+        self.total_duplicate_pairs = len(soft_duplicates)
         self.current_pair_index = 0
         
         # Mark scan as complete
@@ -193,77 +199,82 @@ class MainWindow(QMainWindow):
             # Show first pair for manual review
             self.show_next_duplicate_pair()
         else:
-            QMessageBox.information(self, "Scan abgeschlossen", "Keine weiteren Dubletten gefunden!")
-            self.show_start_screen()
+            # No duplicates found, go directly to sorter view
+            self.show_sorter_view(self.current_session_id)
     
     def show_next_duplicate_pair(self):
         """Show next duplicate pair for manual review."""
-        if self.current_pair_index < len(self.duplicate_pairs):
-            self.stack.setCurrentWidget(self.duplicate_review_screen)
-            
-            # Pair is (path1, path2)
+        while self.current_pair_index < len(self.duplicate_pairs):
+            # Check if files still exist (one might have been deleted in previous step)
             left_path_str, right_path_str = self.duplicate_pairs[self.current_pair_index]
             left_path = Path(left_path_str)
             right_path = Path(right_path_str)
             
-            # Get metadata
-            left_metadata = self.duplicate_detector.get_image_metadata(left_path_str)
-            right_metadata = self.duplicate_detector.get_image_metadata(right_path_str)
-            
-            # Load pair
-            self.duplicate_review_screen.load_pair(left_path, right_path, left_metadata, right_metadata)
-            self.duplicate_review_screen.update_progress(
-                self.current_pair_index + 1,
-                len(self.duplicate_pairs)
-            )
-        else:
-            # All pairs reviewed
-            self.complete_duplicate_review()
+            if left_path.exists() and right_path.exists():
+                # Valid pair found
+                self.stack.setCurrentWidget(self.duplicate_review_screen)
+                
+                # Get metadata
+                left_metadata = self.duplicate_detector.get_image_metadata(left_path_str)
+                right_metadata = self.duplicate_detector.get_image_metadata(right_path_str)
+                
+                # Load pair
+                self.duplicate_review_screen.load_pair(left_path, right_path, left_metadata, right_metadata)
+                self.duplicate_review_screen.update_progress(
+                    self.current_pair_index + 1,
+                    self.total_duplicate_pairs
+                )
+                return
+            else:
+                # Pair invalid (one file deleted), skip it
+                self.current_pair_index += 1
+        
+        # All pairs reviewed
+        self.complete_duplicate_review()
     
     def keep_left_image(self):
         """User chose to keep left image, delete right."""
+        self.duplicate_review_screen.set_processing(self.duplicate_review_screen.left_btn)
+        QTimer.singleShot(10, self._process_keep_left)
+
+    def _process_keep_left(self):
         if self.current_pair_index < len(self.duplicate_pairs):
             left_path, right_path = self.duplicate_pairs[self.current_pair_index]
             
             # Move right to trash
-            if self.duplicate_detector.move_to_trash(right_path, self.current_session_id):
-                # Remove all remaining pairs that contain the deleted file
-                self.duplicate_pairs = [
-                    (l, r) for l, r in self.duplicate_pairs[self.current_pair_index + 1:]
-                    if l != right_path and r != right_path
-                ]
-                self.current_pair_index = 0  # Reset index since we rebuilt the list
-            else:
+            if not self.duplicate_detector.move_to_trash(right_path, self.current_session_id):
                 QMessageBox.warning(self, "Fehler", f"Konnte Datei nicht löschen: {right_path}")
-                self.current_pair_index += 1
             
+            self.duplicate_review_screen.reset_processing()
+            self.current_pair_index += 1
             self.show_next_duplicate_pair()
     
     def keep_right_image(self):
         """User chose to keep right image, delete left."""
+        self.duplicate_review_screen.set_processing(self.duplicate_review_screen.right_btn)
+        QTimer.singleShot(10, self._process_keep_right)
+
+    def _process_keep_right(self):
         if self.current_pair_index < len(self.duplicate_pairs):
             left_path, right_path = self.duplicate_pairs[self.current_pair_index]
             
             # Move left to trash
-            if self.duplicate_detector.move_to_trash(left_path, self.current_session_id):
-                # Remove all remaining pairs that contain the deleted file
-                self.duplicate_pairs = [
-                    (l, r) for l, r in self.duplicate_pairs[self.current_pair_index + 1:]
-                    if l != left_path and r != left_path
-                ]
-                self.current_pair_index = 0  # Reset index since we rebuilt the list
-            else:
+            if not self.duplicate_detector.move_to_trash(left_path, self.current_session_id):
                 QMessageBox.warning(self, "Fehler", f"Konnte Datei nicht löschen: {left_path}")
-                self.current_pair_index += 1
             
+            self.duplicate_review_screen.reset_processing()
+            self.current_pair_index += 1
             self.show_next_duplicate_pair()
     
     def keep_both_images(self):
         """User chose to keep both images."""
-        if self.current_pair_index < len(self.duplicate_pairs):
-            # Just skip to next pair without deleting anything
-            self.current_pair_index += 1
-            self.show_next_duplicate_pair()
+        self.duplicate_review_screen.set_processing(self.duplicate_review_screen.both_btn)
+        QTimer.singleShot(10, self._process_keep_both)
+
+    def _process_keep_both(self):
+        self.duplicate_review_screen.reset_processing()
+        self.current_pair_index += 1
+        self.show_next_duplicate_pair()
     
     def complete_duplicate_review(self):
         """Complete duplicate review process."""
