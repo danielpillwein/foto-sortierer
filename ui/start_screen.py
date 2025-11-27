@@ -7,6 +7,8 @@ import subprocess
 import os
 from pathlib import Path
 
+from ui.components.stats_popup import StatsPopup
+
 class StartScreen(QWidget):
     create_session_clicked = pyqtSignal()
     resume_session_clicked = pyqtSignal(str) # session_id
@@ -14,6 +16,7 @@ class StartScreen(QWidget):
     def __init__(self, session_manager):
         super().__init__()
         self.session_manager = session_manager
+        self.current_stats_popup = None  # Track open popup
         self.init_ui()
 
     def init_ui(self):
@@ -249,7 +252,7 @@ class StartScreen(QWidget):
         media_icon.setPixmap(QIcon("assets/icons/image.svg").pixmap(16, 16))
         media_icon.setStyleSheet("border: none; background: transparent;")
         
-        media_text = QLabel(f"{session.get('total_files', 0)} Medien")
+        media_text = QLabel(f"{session.get('initial_filecount', 0)} Medien")
         media_text.setStyleSheet("color: #AAAAAA; font-size: 13px; font-weight: 500; border: none; background: transparent;")
         
         media_row.addWidget(media_icon)
@@ -264,11 +267,13 @@ class StartScreen(QWidget):
         prog_icon.setPixmap(QIcon("assets/icons/chart.svg").pixmap(16, 16))
         prog_icon.setStyleSheet("border: none; background: transparent;")
         
-        # Calculate progress from processed/total
-        total_files = session.get('total_files', 0)
-        processed_files = session.get('processed_files', 0)
-        if total_files > 0:
-            progress_val = int((processed_files / total_files) * 100)
+        # Calculate progress: (sorted + deleted) / initial
+        initial_count = session.get('initial_filecount', 0)
+        sorted_files = session.get('sorted_files', 0)
+        deleted_count = session.get('deleted_count', 0)
+        
+        if initial_count > 0:
+            progress_val = int(((sorted_files + deleted_count) / initial_count) * 100)
         else:
             progress_val = 0
             
@@ -343,6 +348,7 @@ class StartScreen(QWidget):
                 border: 1px solid #444;
             }
         """)
+        stats_btn.clicked.connect(lambda: self.show_stats_popup(session, stats_btn))
         
         # Target folder button
         target_btn = QPushButton("Ziel")
@@ -401,3 +407,21 @@ class StartScreen(QWidget):
         layout.addLayout(action_layout)
         
         return card
+    
+    def show_stats_popup(self, session, button):
+        """Show statistics popup for a session."""
+        # Close previous popup if open
+        if self.current_stats_popup:
+            self.current_stats_popup.close()
+            self.current_stats_popup = None
+        
+        # Create new popup
+        popup = StatsPopup(session, self)
+        self.current_stats_popup = popup
+        
+        # Position popup relative to button (bottom-right)
+        button_pos = button.mapToGlobal(button.rect().bottomLeft())
+        popup.move(button_pos.x(), button_pos.y() + 5)
+        
+        # Show popup
+        popup.show()

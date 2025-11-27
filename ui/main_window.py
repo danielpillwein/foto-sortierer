@@ -57,7 +57,7 @@ class MainWindow(QMainWindow):
         from core.config_manager import ConfigManager
         self.config_manager = ConfigManager()
         self.session_manager = SessionManager()
-        self.duplicate_detector = DuplicateDetector(self.config_manager)
+        self.duplicate_detector = DuplicateDetector(self.config_manager, session_manager=self.session_manager)
         
         # Logger
         import logging
@@ -158,6 +158,13 @@ class MainWindow(QMainWindow):
         file_manager = FileManager()
         files = file_manager.scan_directory(source_path)
         total_files = len(files)
+        
+        # Store initial_filecount in session before scan
+        if self.current_session_id:
+            session = self.session_manager.sessions.get(self.current_session_id)
+            if session:
+                session["initial_filecount"] = total_files
+                self.session_manager.save_sessions()
         
         self.duplicate_scan_screen.set_total_files(total_files)
         
@@ -265,7 +272,7 @@ class MainWindow(QMainWindow):
             self.duplicate_review_screen.reset_processing()
             self.current_pair_index += 1
             self.show_next_duplicate_pair()
-    
+
     def keep_both_images(self):
         """User chose to keep both images."""
         self.duplicate_review_screen.set_processing(self.duplicate_review_screen.both_btn)

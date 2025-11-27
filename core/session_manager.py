@@ -43,9 +43,12 @@ class SessionManager:
             "last_accessed": time.time(),
             "status": "new", # new, scanning, sorting, completed
             "detect_duplicates": detect_duplicates,
+            "detect_duplicates": detect_duplicates,
             "progress": 0,
-            "total_files": 0,
-            "processed_files": 0
+            "initial_filecount": 0,
+            "sorted_files": 0,
+            "deleted_count": 0,
+            "deleted_size_bytes": 0
         }
         self.sessions[session_id] = session_data
         self.save_sessions()
@@ -85,11 +88,11 @@ class SessionManager:
 
         try:
             file_manager = FileManager()
-            detector = DuplicateDetector(config_manager)
+            detector = DuplicateDetector(config_manager, session_manager=self)
 
-            # 1. Scan Directory
+            # 1. Scan Directory and store initial count
             files = file_manager.scan_directory(session["source_path"])
-            session["total_files"] = len(files)
+            session["initial_filecount"] = len(files)
             self.save_sessions()
 
             # 2. Detect Duplicates
@@ -114,7 +117,8 @@ class SessionManager:
 
     def move_file(self, session_id, file_path, target_folder):
         """
-        Moves a file to the target folder and updates session progress.
+        Moves a file to the target folder.
+        Note: Does NOT update sorted_files - caller is responsible for that.
         """
         import shutil
         
@@ -131,24 +135,42 @@ class SessionManager:
             
             # Move file
             shutil.move(str(source), str(destination))
-            
-            # Update session stats
-            session["processed_files"] = session.get("processed_files", 0) + 1
-            if session.get("total_files", 0) > 0:
-                session["progress"] = int((session["processed_files"] / session["total_files"]) * 100)
-            
-            self.save_sessions()
             return True
         except Exception as e:
             self.logger.error(f"Error moving file {source} to {destination}: {e}")
             return False
 
+    def update_deleted_stats(self, session_id, file_size):
+        """
+        Updates the deleted file count and size for a session.
+        """
+        session = self.sessions.get(session_id)
+        if not session:
+            return False
+        
+        session["deleted_count"] = session.get("deleted_count", 0) + 1
+        session["deleted_size_bytes"] = session.get("deleted_size_bytes", 0) + file_size
+        self.save_sessions()
+        return True
+    
     def delete_file(self, session_id, file_path):
         """
-        Moves a file to the 'gelöscht_<session_id>' folder.
+        Moves a file to the 'gelöscht_<session_id>' folder and updates deleted stats.
         """
+        # Get file size before moving
+        try:
+            file_size = Path(file_path).stat().st_size
+        except Exception as e:
+            self.logger.error(f"Error getting file size for {file_path}: {e}")
+            file_size = 0
+        
         trash_folder = Path(os.path.expanduser(f"~/Foto-Sortierer/gelöscht_{session_id}"))
-        return self.move_file(session_id, file_path, str(trash_folder))
+        success = self.move_file(session_id, file_path, str(trash_folder))
+        
+        if success:
+            self.update_deleted_stats(session_id, file_size)
+        
+        return success
 
     def get_session_progress(self, session_id):
         """
@@ -160,6 +182,6 @@ class SessionManager:
         
         return {
             "progress": session.get("progress", 0),
-            "processed": session.get("processed_files", 0),
-            "total": session.get("total_files", 0)
+            "processed": session.get("sorted_files", 0),
+            "total": session.get("initial_filecount", 0)
         }

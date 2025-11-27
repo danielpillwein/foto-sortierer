@@ -14,9 +14,10 @@ import time
 from .config_manager import ConfigManager
 
 class DuplicateDetector:
-    def __init__(self, config_manager: ConfigManager):
+    def __init__(self, config_manager: ConfigManager, session_manager=None):
         self.logger = logging.getLogger("FotoSortierer.DuplicateDetector")
         self.config = config_manager
+        self.session_manager = session_manager
         self.hash_size = self.config.get("hash_size", 8)
         self.threshold_hard = self.config.get("threshold_hard", 4)
         self.threshold_soft = self.config.get("threshold_soft", 10)
@@ -345,6 +346,9 @@ class DuplicateDetector:
             try:
                 src = Path(file_path)
                 if src.exists():
+                    # Get file size before moving
+                    file_size = src.stat().st_size
+                    
                     dst = delete_dir / src.name
                     # Handle name collision in delete folder
                     counter = 1
@@ -355,6 +359,10 @@ class DuplicateDetector:
                     shutil.move(str(src), str(dst))
                     deleted_set.add(file_path)
                     self.logger.info(f"Auto-deleted hard duplicate: {file_path} -> {dst}")
+                    
+                    # Update session stats
+                    if self.session_manager:
+                        self.session_manager.update_deleted_stats(session_id, file_size)
             except Exception as e:
                 self.logger.error(f"Error moving file {file_path}: {e}")
 
@@ -401,11 +409,14 @@ class DuplicateDetector:
             }
 
     def move_to_trash(self, file_path: str, session_id: str) -> bool:
-        """Move a file to the session's trash folder."""
+        """Move a file to the session's trash folder and update session stats."""
         try:
             src = Path(file_path)
             if not src.exists():
                 return False
+            
+            # Get file size before moving
+            file_size = src.stat().st_size
                 
             delete_dir = Path(os.path.expanduser(f"~/Foto-Sortierer/gelöscht_{session_id}"))
             delete_dir.mkdir(parents=True, exist_ok=True)
@@ -419,6 +430,11 @@ class DuplicateDetector:
             
             shutil.move(str(src), str(dst))
             self.logger.info(f"Moved to trash: {src} -> {dst}")
+            
+            # Update session stats
+            if self.session_manager:
+                self.session_manager.update_deleted_stats(session_id, file_size)
+            
             return True
         except Exception as e:
             self.logger.error(f"Error moving to trash {file_path}: {e}")

@@ -889,6 +889,14 @@ class SorterView(QWidget):
             
         if not self.current_session_id:
             return
+        
+        current_file_path = Path(self.files[self.current_file_index])
+        
+        # Get file size before moving
+        try:
+            file_size = current_file_path.stat().st_size
+        except Exception as e:
+            file_size = 0
             
         # Use the same logic as DuplicateDetector for the trash folder
         # ~/Foto-Sortierer/gelöscht_{session_id}
@@ -902,7 +910,24 @@ class SorterView(QWidget):
             return
             
         # Reuse move logic by moving to the deleted folder
+        # Store the file count before move
+        files_before = len(self.files)
         self.move_current_file(str(deleted_dir))
+        
+        # If file was successfully moved (file list decreased), update deleted stats
+        if len(self.files) < files_before:
+            self.session_manager.update_deleted_stats(self.current_session_id, file_size)
+            
+            # Update progress after deletion
+            if self.current_session_id:
+                session = self.session_manager.sessions.get(self.current_session_id)
+                if session:
+                    initial_count = session.get("initial_filecount", 0)
+                    sorted_count = session.get("sorted_files", 0)
+                    deleted_count = session.get("deleted_count", 0)
+                    
+                    processed = sorted_count + deleted_count
+                    self.update_progress(processed, initial_count)
 
     def create_new_folder_dialog(self):
         """Opens a dialog to create a new folder in the target directory."""
@@ -976,16 +1001,24 @@ class SorterView(QWidget):
             # Update internal state
             self.files.pop(self.current_file_index)
             
-            # Update session stats
-            if self.current_session_id:
+            # Check if this is a sorting operation (not deletion)
+            # Deletion goes to ~/Foto-Sortierer/gelöscht_{session_id}
+            is_deletion = "gelöscht_" in str(target_dir)
+            
+            # Update session stats - only increment sorted_files if sorting (not deleting)
+            if self.current_session_id and not is_deletion:
                 session = self.session_manager.sessions.get(self.current_session_id)
                 if session:
-                    session["processed_files"] = session.get("processed_files", 0) + 1
+                    session["sorted_files"] = session.get("sorted_files", 0) + 1
                     self.session_manager.save_sessions()
                     
                     # Update progress bar
-                    total = session.get("total_files", len(self.files) + session["processed_files"])
-                    self.update_progress(session["processed_files"], total)
+                    initial_count = session.get("initial_filecount", 0)
+                    sorted_count = session.get("sorted_files", 0)
+                    deleted_count = session.get("deleted_count", 0)
+                    
+                    processed = sorted_count + deleted_count
+                    self.update_progress(processed, initial_count)
             
             # Load next file (index stays same because we popped the current one)
             # But if we were at the last item, we need to adjust
@@ -1012,9 +1045,10 @@ class SorterView(QWidget):
         media_files = file_manager.scan_directory(session["source_path"])
         self.files = [f["path"] for f in media_files]
         
-        # Update session with total files if not set
-        if session.get("total_files", 0) == 0:
-            session["total_files"] = len(self.files)
+        # Update session with file counts if not set (for sessions without duplicate detection)
+        if session.get("initial_filecount", 0) == 0:
+            file_count = len(self.files)
+            session["initial_filecount"] = file_count
             self.session_manager.save_sessions()
         
         # Initialize navigation state
@@ -1023,9 +1057,11 @@ class SorterView(QWidget):
         self.update_navigation_ui()
         
         # Update progress
-        total = session.get("total_files", len(self.files))
-        processed = session.get("processed_files", 0)
-        self.update_progress(processed, total)
+        initial_count = session.get("initial_filecount", len(self.files))
+        sorted_count = session.get("sorted_files", 0)
+        deleted_count = session.get("deleted_count", 0)
+        processed = sorted_count + deleted_count
+        self.update_progress(processed, initial_count)
         
         # Reset index and load first file
         self.current_file_index = 0
@@ -1057,9 +1093,11 @@ class SorterView(QWidget):
             if self.current_session_id:
                 session = self.session_manager.sessions.get(self.current_session_id)
                 if session:
-                    total = session.get("total_files", len(self.files))
-                    processed = session.get("processed_files", 0)
-                    self.update_progress(processed, total)
+                    initial_count = session.get("initial_filecount", len(self.files))
+                    sorted_count = session.get("sorted_files", 0)
+                    deleted_count = session.get("deleted_count", 0)
+                    processed = sorted_count + deleted_count
+                    self.update_progress(processed, initial_count)
         else:
              # Fallback if index is out of bounds (e.g. after deletion)
             if self.files:
