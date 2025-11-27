@@ -12,6 +12,7 @@ import shutil
 # Import breadcrumb navigation components
 from ui.components.breadcrumb_bar import BreadcrumbBar
 from ui.components.shortcut_folder_panel import ShortcutFolderPanel
+from ui.components.stats_popup import StatsPopup
 
 class SorterView(QWidget):
     """Main Sorter View Interface - 1:1 Mockup Implementation"""
@@ -34,7 +35,9 @@ class SorterView(QWidget):
         self.current_subfolders = []  # Subfolders at current level
         
         # Connect media loaded signal
+        # Connect media loaded signal
         self.media_loader.image_loaded.connect(self.on_media_loaded)
+        self.current_stats_popup = None
         self.init_ui()
 
     # ---------------------------------------------------------------------
@@ -137,7 +140,7 @@ class SorterView(QWidget):
         
         
         # Stats button
-        stats_btn = QPushButton("  Details / Stats")
+        stats_btn = QPushButton("  Statistiken")
         stats_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         
         # Load and set icon
@@ -163,6 +166,7 @@ class SorterView(QWidget):
                 border-color: #444; 
             }
         """)
+        stats_btn.clicked.connect(lambda: self.show_stats_popup(stats_btn))
         top_layout.addWidget(stats_btn)
         
         main_layout.addLayout(top_layout)
@@ -1105,3 +1109,37 @@ class SorterView(QWidget):
                 self.load_current_file()
             else:
                 self.display_image(None)
+                self.file_name_label.setText("Keine Dateien vorhanden")
+
+    def show_stats_popup(self, button):
+        """Show statistics popup for the current session."""
+        if not self.current_session_id:
+            return
+            
+        session = self.session_manager.sessions.get(self.current_session_id)
+        if not session:
+            return
+
+        # Close previous popup if open
+        if self.current_stats_popup:
+            self.current_stats_popup.close()
+            self.current_stats_popup = None
+        
+        # Create new popup
+        popup = StatsPopup(session, self)
+        self.current_stats_popup = popup
+        
+        # Position popup: Top-right corner of popup under bottom-right corner of button
+        # Get button's bottom-right coordinate in global space
+        btn_bottom_right = button.mapToGlobal(button.rect().bottomRight())
+        
+        # Calculate popup position
+        # x = button_right - popup_width
+        # y = button_bottom + margin
+        popup_x = btn_bottom_right.x() - popup.width()
+        popup_y = btn_bottom_right.y() + 5
+        
+        popup.move(popup_x, popup_y)
+        
+        # Show popup
+        popup.show()
