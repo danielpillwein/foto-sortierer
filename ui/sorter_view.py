@@ -1,10 +1,10 @@
 from PyQt6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QFrame,
-    QScrollArea, QSplitter, QProgressBar, QLineEdit, QGridLayout,
-    QMessageBox, QInputDialog, QGraphicsScene, QGraphicsView, QSlider
+    QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, 
+    QSplitter, QGraphicsView, QGraphicsScene, QLineEdit, 
+    QProgressBar, QSlider, QMessageBox, QInputDialog
 )
-from PyQt6.QtCore import Qt, pyqtSignal, QRectF, QUrl
-from PyQt6.QtGui import QFont, QPixmap, QIcon, QPainter, QColor
+from PyQt6.QtCore import Qt, pyqtSignal, QRectF, QSize, QUrl
+from PyQt6.QtGui import QPixmap, QIcon, QPainter, QColor, QFont
 from PyQt6.QtMultimedia import QMediaPlayer, QAudioOutput
 from PyQt6.QtMultimediaWidgets import QVideoWidget
 from pathlib import Path
@@ -16,6 +16,7 @@ from ui.components.breadcrumb_bar import BreadcrumbBar
 from ui.components.shortcut_folder_panel import ShortcutFolderPanel
 from ui.components.stats_popup import StatsPopup
 from ui.components.completion_popup import CompletionPopup
+from ui.components.clickable_slider import ClickableSlider
 
 class SorterView(QWidget):
     """Main Sorter View Interface - 1:1 Mockup Implementation"""
@@ -38,15 +39,20 @@ class SorterView(QWidget):
         self.current_subfolders = []  # Subfolders at current level
         
         # Video player components (initialized in init_ui)
+        # Video player components (initialized in init_ui)
         self.media_player = None
         self.audio_output = None
         self.video_widget = None
         self.current_media_type = 'image'  # 'image' or 'video'
+        self.video_initialized = False
         
-        # Connect media loaded signal
         # Connect media loaded signal
         self.media_loader.image_loaded.connect(self.on_media_loaded)
         self.current_stats_popup = None
+        
+        # Enable keyboard focus
+        self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
+        
         self.init_ui()
 
     # ---------------------------------------------------------------------
@@ -54,6 +60,14 @@ class SorterView(QWidget):
     # ---------------------------------------------------------------------
     def keyPressEvent(self, event):
         key = event.key()
+        
+        # Spacebar for Video Play/Pause - Exclusive handling
+        if key == Qt.Key.Key_Space:
+            if self.current_media_type == 'video':
+                self.toggle_play_pause()
+            event.accept()  # Consume event to prevent button activation
+            return
+
         if Qt.Key.Key_1 <= key <= Qt.Key.Key_9:
             self.move_to_folder_by_index(key - Qt.Key.Key_1)
         elif key == Qt.Key.Key_Delete:
@@ -309,21 +323,47 @@ class SorterView(QWidget):
         self.video_controls_panel.setStyleSheet("background-color: #0E0E0F;")
         self.video_controls_panel.hide()  # Hidden by default
         
-        controls_layout = QVBoxLayout(self.video_controls_panel)
-        controls_layout.setContentsMargins(0, 10, 0, 0)
-        controls_layout.setSpacing(8)
+        # Single row layout for all controls
+        controls_layout = QHBoxLayout(self.video_controls_panel)
+        controls_layout.setContentsMargins(20, 0, 20, 0)
+        controls_layout.setSpacing(12)
+        controls_layout.setAlignment(Qt.AlignmentFlag.AlignVCenter)
         
-        # Timeline row
-        timeline_row = QHBoxLayout()
-        timeline_row.setSpacing(12)
+        # Play/Pause button (Left)
+        self.play_pause_btn = QPushButton()
+        self.play_pause_btn.setFixedSize(40, 40)
+        self.play_pause_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        
+        # Set initial icon
+        icon_path = Path(__file__).parent.parent / "assets" / "icons" / "play.svg"
+        if icon_path.exists():
+            self.play_pause_btn.setIcon(QIcon(str(icon_path)))
+            self.play_pause_btn.setIconSize(QSize(16, 16))
+            
+        self.play_pause_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #2D7DFF;
+                border: none;
+                border-radius: 20px;
+                padding: 0;
+            }
+            QPushButton:hover {
+                background-color: #3B82F6;
+            }
+            QPushButton:pressed {
+                background-color: #1D4ED8;
+            }
+        """)
+        self.play_pause_btn.clicked.connect(self.toggle_play_pause)
+        controls_layout.addWidget(self.play_pause_btn, 0, Qt.AlignmentFlag.AlignVCenter)
         
         # Current time label
         self.current_time_label = QLabel("0:00")
         self.current_time_label.setStyleSheet("color: #666; font-size: 13px; min-width: 45px;")
-        timeline_row.addWidget(self.current_time_label)
+        controls_layout.addWidget(self.current_time_label, 0, Qt.AlignmentFlag.AlignVCenter)
         
-        # Timeline slider
-        self.timeline_slider = QSlider(Qt.Orientation.Horizontal)
+        # Timeline slider (Clickable)
+        self.timeline_slider = ClickableSlider(Qt.Orientation.Horizontal)
         self.timeline_slider.setRange(0, 0)
         self.timeline_slider.setStyleSheet("""
             QSlider::groove:horizontal {
@@ -347,42 +387,16 @@ class SorterView(QWidget):
                 background: #E0E0E0;
             }
         """)
+        # Connect both clicked (jump) and sliderMoved (drag)
+        self.timeline_slider.clicked.connect(self.on_slider_moved)
         self.timeline_slider.sliderMoved.connect(self.on_slider_moved)
-        timeline_row.addWidget(self.timeline_slider, 1)
+        controls_layout.addWidget(self.timeline_slider, 1, Qt.AlignmentFlag.AlignVCenter)
         
         # Duration label
         self.duration_label = QLabel("0:00")
         self.duration_label.setStyleSheet("color: #666; font-size: 13px; min-width: 45px;")
-        self.duration_label.setAlignment(Qt.AlignmentFlag.AlignRight)
-        timeline_row.addWidget(self.duration_label)
-        
-        controls_layout.addLayout(timeline_row)
-        
-        # Play/Pause button row
-        button_row = QHBoxLayout()
-        button_row.addStretch()
-        
-        self.play_pause_btn = QPushButton("▶")
-        self.play_pause_btn.setFixedSize(40, 40)
-        self.play_pause_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.play_pause_btn.setStyleSheet("""
-            QPushButton {
-                background-color: #2D7DFF;
-                color: white;
-                border: none;
-                border-radius: 20px;
-                font-size: 16px;
-                font-weight: bold;
-            }
-            QPushButton:hover {
-                background-color: #3B82F6;
-            }
-        """)
-        self.play_pause_btn.clicked.connect(self.toggle_play_pause)
-        button_row.addWidget(self.play_pause_btn)
-        
-        button_row.addStretch()
-        controls_layout.addLayout(button_row)
+        self.duration_label.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+        controls_layout.addWidget(self.duration_label, 0, Qt.AlignmentFlag.AlignVCenter)
         
         layout.addWidget(self.video_controls_panel)
         
@@ -395,6 +409,7 @@ class SorterView(QWidget):
         # Connect media player signals
         self.media_player.positionChanged.connect(self.on_position_changed)
         self.media_player.durationChanged.connect(self.on_duration_changed)
+        self.media_player.mediaStatusChanged.connect(self.on_media_status_changed)
         
         self.content_splitter.addWidget(self.media_container)
 
@@ -816,8 +831,12 @@ class SorterView(QWidget):
     # ---------------------------------------------------------------------
     def is_video_file(self, file_path):
         """Check if file is a video format."""
-        video_extensions = {'.mp4', '.mov', '.gif', '.avi', '.3gp', '.mkv', '.webm', '.flv', '.wmv'}
+        video_extensions = {'.mp4', '.mov', '.avi', '.3gp', '.mkv', '.webm', '.flv', '.wmv'}
         return Path(file_path).suffix.lower() in video_extensions
+    
+    def is_gif_file(self, file_path):
+        """Check if file is a GIF."""
+        return Path(file_path).suffix.lower() == '.gif'
     
     def display_video(self, file_path):
         """Load and display a video file."""
@@ -835,23 +854,83 @@ class SorterView(QWidget):
         # Stop any current playback
         self.media_player.stop()
         
+        # Reset initialization flag
+        self.video_initialized = False
+        
         # Load video
         self.media_player.setSource(QUrl.fromLocalFile(str(file_path)))
         
-        # Reset controls
-        self.play_pause_btn.setText("▶")
+        # Auto-play video
+        self.media_player.play()
+        
+        # Reset controls - set pause icon (since we are auto-playing)
+        pause_icon_path = Path(__file__).parent.parent / "assets" / "icons" / "pause.svg"
+        if pause_icon_path.exists():
+            self.play_pause_btn.setIcon(QIcon(str(pause_icon_path)))
+            
         self.current_time_label.setText("0:00")
         self.duration_label.setText("0:00")
         self.timeline_slider.setValue(0)
+    
+    def display_gif(self, file_path):
+        """Load and display a GIF file with auto-loop and no controls."""
+        self.current_media_type = 'gif'
+        
+        # Hide image view, show video view
+        self.view.hide()
+        self.video_widget.show()
+        self.video_controls_panel.hide()  # Hide controls for GIFs
+        
+        # Hide zoom controls for GIFs
+        self.zoom_in_btn.hide()
+        self.zoom_out_btn.hide()
+        
+        # Stop any current playback
+        self.media_player.stop()
+        
+        # Reset initialization flag
+        self.video_initialized = False
+        
+        # Load GIF
+        self.media_player.setSource(QUrl.fromLocalFile(str(file_path)))
+        
+        # Set to loop indefinitely
+        self.media_player.setLoops(QMediaPlayer.Loops.Infinite)
+        
+        # Auto-play GIF
+        self.media_player.play()
+        
+    def on_media_status_changed(self, status):
+        """Handle media status changes."""
+        if status == QMediaPlayer.MediaStatus.LoadedMedia:
+            if not self.video_initialized:
+                # Video loaded - ready to play
+                self.video_initialized = True
+                # If we are in video mode (not GIF), ensure it plays
+                if self.current_media_type == 'video':
+                    self.media_player.play()
+                    
+        elif status == QMediaPlayer.MediaStatus.EndOfMedia:
+            # Video ended - reset to play icon
+            if self.current_media_type == 'video':  # Don't update for GIFs (they loop)
+                play_icon_path = Path(__file__).parent.parent / "assets" / "icons" / "play.svg"
+                if play_icon_path.exists():
+                    self.play_pause_btn.setIcon(QIcon(str(play_icon_path)))
     
     def toggle_play_pause(self):
         """Toggle between play and pause states."""
         if self.media_player.playbackState() == QMediaPlayer.PlaybackState.PlayingState:
             self.media_player.pause()
-            self.play_pause_btn.setText("▶")
+            # Set play icon
+            play_icon_path = Path(__file__).parent.parent / "assets" / "icons" / "play.svg"
+            if play_icon_path.exists():
+                self.play_pause_btn.setIcon(QIcon(str(play_icon_path)))
         else:
             self.media_player.play()
-            self.play_pause_btn.setText("⏸")
+            # Set pause icon
+            pause_icon_path = Path(__file__).parent.parent / "assets" / "icons" / "pause.svg"
+            if pause_icon_path.exists():
+                self.play_pause_btn.setIcon(QIcon(str(pause_icon_path)))
     
     def on_position_changed(self, position):
         """Update timeline and current time when video position changes."""
@@ -1049,8 +1128,21 @@ class SorterView(QWidget):
         """Handle the signal when a new media file is loaded.
         Loads the image/video and updates the file info label and EXIF data.
         """
+        # Check if it's a GIF file first
+        if self.is_gif_file(file_path):
+            self.display_gif(file_path)
+            
+            # Update Icon for GIF
+            icon_path = Path(__file__).parent.parent / "assets" / "icons" / "video.svg"
+            if icon_path.exists():
+                self.file_icon_label.setPixmap(QPixmap(str(icon_path)).scaled(20, 20, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation))
+            
+            # For GIF, show file size
+            size_mb = Path(file_path).stat().st_size / (1024 * 1024)
+            self.file_meta_label.setText(f"• {size_mb:.1f} MB • GIF")
+            
         # Check if it's a video file
-        if self.is_video_file(file_path):
+        elif self.is_video_file(file_path):
             self.display_video(file_path)
             
             # Update Icon for video
@@ -1236,8 +1328,8 @@ class SorterView(QWidget):
                 target_path = target_dir / f"{base}_{counter}{suffix}"
                 counter += 1
 
-        # Release file lock if it's a video being played
-        if self.media_player and self.current_media_type == 'video':
+        # Release file lock if it's a video or gif being played
+        if self.media_player and self.current_media_type in ['video', 'gif']:
             self.media_player.stop()
             self.media_player.setSource(QUrl())
 
@@ -1317,6 +1409,9 @@ class SorterView(QWidget):
         # Reset index and load first file
         self.current_file_index = 0
         self.load_current_file()
+        
+        # Set focus to view to capture keyboard events
+        self.setFocus()
 
     def update_progress(self, processed, total):
         """Updates the progress bar and label."""

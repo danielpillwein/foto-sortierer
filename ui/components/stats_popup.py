@@ -1,7 +1,7 @@
 from PyQt6.QtWidgets import QFrame, QVBoxLayout, QHBoxLayout, QLabel
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QColor
-from PyQt6.QtWidgets import QGraphicsDropShadowEffect
+
 from pathlib import Path
 import os
 
@@ -12,7 +12,7 @@ class StatsPopup(QFrame):
     def __init__(self, session, parent=None):
         super().__init__(parent)
         self.session = session
-        self.setWindowFlags(Qt.WindowType.Popup | Qt.WindowType.FramelessWindowHint)
+        self.setWindowFlags(Qt.WindowType.Popup | Qt.WindowType.FramelessWindowHint | Qt.WindowType.NoDropShadowWindowHint)
         self.init_ui()
     
     def init_ui(self):
@@ -33,12 +33,7 @@ class StatsPopup(QFrame):
             }
         """)
         
-        # Add subtle drop shadow
-        shadow = QGraphicsDropShadowEffect()
-        shadow.setBlurRadius(15)
-        shadow.setColor(QColor(0, 0, 0, 100))  # Subtle shadow
-        shadow.setOffset(0, 2)
-        self.setGraphicsEffect(shadow)
+
         
         # Add stat rows with left-aligned labels and right-aligned values
         stat_data = self.calculate_stats()
