@@ -80,6 +80,8 @@ class SorterView(QWidget):
             self.navigate_file(-1)
         elif key == Qt.Key.Key_Right:
             self.navigate_file(1)
+        elif key == Qt.Key.Key_Plus:
+            self.keep_current_file()
         else:
             super().keyPressEvent(event)
 
@@ -567,7 +569,46 @@ class SorterView(QWidget):
         layout = QVBoxLayout()
         layout.setSpacing(10)
         
-        # Delete button
+        # 1. Keep in Source Button
+        self.keep_btn = QPushButton()
+        self.keep_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.keep_btn.setFixedHeight(45)
+        self.keep_btn.clicked.connect(self.keep_current_file)
+        
+        keep_layout = QHBoxLayout(self.keep_btn)
+        keep_layout.setContentsMargins(15, 0, 15, 0)
+        
+        keep_icon_label = QLabel()
+        keep_icon_label.setStyleSheet("background: transparent; border: none;")
+        keep_icon_path = Path(__file__).parent.parent / "assets" / "icons" / "keep.svg"
+        if keep_icon_path.exists():
+            keep_icon_label.setPixmap(QPixmap(str(keep_icon_path)).scaled(20, 20, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation))
+        keep_layout.addWidget(keep_icon_label)
+        
+        keep_text_label = QLabel("Im Quellordner lassen")
+        keep_text_label.setStyleSheet("color: white; font-weight: 600; font-size: 13px; border: none; background: transparent;")
+        keep_layout.addWidget(keep_text_label)
+        
+        keep_layout.addStretch()
+        
+        keep_shortcut = QLabel("+")
+        keep_shortcut.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        keep_shortcut.setFixedSize(24, 24)
+        keep_shortcut.setStyleSheet("background-color: rgba(255, 255, 255, 0.2); color: white; border-radius: 4px; font-size: 12px; font-weight: bold;")
+        keep_layout.addWidget(keep_shortcut)
+        
+        self.keep_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #374151;
+                border: none;
+                border-radius: 8px;
+                text-align: left;
+            }
+            QPushButton:hover { background-color: #4B5563; }
+        """)
+        layout.addWidget(self.keep_btn)
+        
+        # 2. Delete Button
         self.delete_btn = QPushButton()
         self.delete_btn.setFixedHeight(44)
         self.delete_btn.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -618,7 +659,7 @@ class SorterView(QWidget):
         """)
         layout.addWidget(self.delete_btn)
         
-        # New folder button
+        # 3. New Folder Button
         self.new_folder_btn = QPushButton()
         self.new_folder_btn.setFixedHeight(44)
         self.new_folder_btn.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -627,7 +668,6 @@ class SorterView(QWidget):
         nf_layout = QHBoxLayout(self.new_folder_btn)
         nf_layout.setContentsMargins(16, 0, 16, 0)
         nf_layout.setSpacing(12)
-        # Removed AlignCenter to match Delete button (Left aligned content)
         
         # New Folder Icon
         nf_icon_lbl = QLabel()
@@ -1298,6 +1338,45 @@ class SorterView(QWidget):
                 
             except Exception as e:
                 QMessageBox.critical(self, "Fehler", f"Fehler beim Erstellen des Ordners:\n{str(e)}")
+
+    def keep_current_file(self):
+        """Keeps the file in source folder, counts as sorted, moves to next."""
+        if not self.files or self.current_file_index >= len(self.files):
+            return
+
+        # Release file lock if it's a video or gif being played
+        if self.media_player and self.current_media_type in ['video', 'gif']:
+            self.media_player.stop()
+            self.media_player.setSource(QUrl())
+
+        # Update internal state (remove from list as it's processed)
+        self.files.pop(self.current_file_index)
+        
+        # Update session stats
+        if self.current_session_id:
+            session = self.session_manager.sessions.get(self.current_session_id)
+            if session:
+                session["sorted_files"] = session.get("sorted_files", 0) + 1
+                self.session_manager.save_sessions()
+                
+                # Update progress bar
+                initial_count = session.get("initial_filecount", 0)
+                sorted_count = session.get("sorted_files", 0)
+                deleted_count = session.get("deleted_count", 0)
+                
+                processed = sorted_count + deleted_count
+                self.update_progress(processed, initial_count)
+                
+                # Check for completion
+                if not self.files:
+                    self.show_completion_popup()
+                    return
+        
+        # Load next file
+        if self.current_file_index >= len(self.files):
+            self.current_file_index = max(0, len(self.files) - 1)
+            
+        self.load_current_file()
 
     def move_current_file(self, target_folder: str):
         """Moves the current file to the target folder."""
