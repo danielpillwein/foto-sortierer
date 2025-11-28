@@ -1,10 +1,12 @@
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QFrame,
     QScrollArea, QSplitter, QProgressBar, QLineEdit, QGridLayout,
-    QMessageBox, QInputDialog, QGraphicsScene, QGraphicsView
+    QMessageBox, QInputDialog, QGraphicsScene, QGraphicsView, QSlider
 )
-from PyQt6.QtCore import Qt, pyqtSignal, QRectF
+from PyQt6.QtCore import Qt, pyqtSignal, QRectF, QUrl
 from PyQt6.QtGui import QFont, QPixmap, QIcon, QPainter, QColor
+from PyQt6.QtMultimedia import QMediaPlayer, QAudioOutput
+from PyQt6.QtMultimediaWidgets import QVideoWidget
 from pathlib import Path
 import os
 import shutil
@@ -34,6 +36,12 @@ class SorterView(QWidget):
         self.target_root = None  # Root of target directory
         self.current_navigation_path = []  # List of Path objects representing breadcrumb path
         self.current_subfolders = []  # Subfolders at current level
+        
+        # Video player components (initialized in init_ui)
+        self.media_player = None
+        self.audio_output = None
+        self.video_widget = None
+        self.current_media_type = 'image'  # 'image' or 'video'
         
         # Connect media loaded signal
         # Connect media loaded signal
@@ -222,7 +230,7 @@ class SorterView(QWidget):
         
         top_bar.addStretch()
         
-        # Zoom controls
+        # Zoom controls (only for images)
         zoom_layout = QHBoxLayout()
         zoom_layout.setSpacing(4)
         
@@ -267,7 +275,13 @@ class SorterView(QWidget):
         
         layout.addSpacing(15)
         
-        # Graphics view
+        # Media display area - stack image and video widgets
+        media_stack = QWidget()
+        media_stack_layout = QVBoxLayout(media_stack)
+        media_stack_layout.setContentsMargins(0, 0, 0, 0)
+        media_stack_layout.setSpacing(0)
+        
+        # Graphics view for images
         self.scene = QGraphicsScene()
         self.view = QGraphicsView(self.scene)
         self.view.setStyleSheet("background: transparent; border: none;")
@@ -279,8 +293,108 @@ class SorterView(QWidget):
         self.view.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.view.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         self.view.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        media_stack_layout.addWidget(self.view)
         
-        layout.addWidget(self.view)
+        # Video widget
+        self.video_widget = QVideoWidget()
+        self.video_widget.setStyleSheet("background: transparent;")
+        self.video_widget.hide()  # Hidden by default
+        media_stack_layout.addWidget(self.video_widget)
+        
+        layout.addWidget(media_stack, 1)  # Stretch factor 1
+        
+        # Video controls panel
+        self.video_controls_panel = QWidget()
+        self.video_controls_panel.setFixedHeight(60)
+        self.video_controls_panel.setStyleSheet("background-color: #0E0E0F;")
+        self.video_controls_panel.hide()  # Hidden by default
+        
+        controls_layout = QVBoxLayout(self.video_controls_panel)
+        controls_layout.setContentsMargins(0, 10, 0, 0)
+        controls_layout.setSpacing(8)
+        
+        # Timeline row
+        timeline_row = QHBoxLayout()
+        timeline_row.setSpacing(12)
+        
+        # Current time label
+        self.current_time_label = QLabel("0:00")
+        self.current_time_label.setStyleSheet("color: #666; font-size: 13px; min-width: 45px;")
+        timeline_row.addWidget(self.current_time_label)
+        
+        # Timeline slider
+        self.timeline_slider = QSlider(Qt.Orientation.Horizontal)
+        self.timeline_slider.setRange(0, 0)
+        self.timeline_slider.setStyleSheet("""
+            QSlider::groove:horizontal {
+                background: #2A2A2C;
+                height: 6px;
+                border-radius: 3px;
+            }
+            QSlider::sub-page:horizontal {
+                background: #2D7DFF;
+                height: 6px;
+                border-radius: 3px;
+            }
+            QSlider::handle:horizontal {
+                background: #FFFFFF;
+                width: 14px;
+                height: 14px;
+                margin: -4px 0;
+                border-radius: 7px;
+            }
+            QSlider::handle:horizontal:hover {
+                background: #E0E0E0;
+            }
+        """)
+        self.timeline_slider.sliderMoved.connect(self.on_slider_moved)
+        timeline_row.addWidget(self.timeline_slider, 1)
+        
+        # Duration label
+        self.duration_label = QLabel("0:00")
+        self.duration_label.setStyleSheet("color: #666; font-size: 13px; min-width: 45px;")
+        self.duration_label.setAlignment(Qt.AlignmentFlag.AlignRight)
+        timeline_row.addWidget(self.duration_label)
+        
+        controls_layout.addLayout(timeline_row)
+        
+        # Play/Pause button row
+        button_row = QHBoxLayout()
+        button_row.addStretch()
+        
+        self.play_pause_btn = QPushButton("▶")
+        self.play_pause_btn.setFixedSize(40, 40)
+        self.play_pause_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.play_pause_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #2D7DFF;
+                color: white;
+                border: none;
+                border-radius: 20px;
+                font-size: 16px;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background-color: #3B82F6;
+            }
+        """)
+        self.play_pause_btn.clicked.connect(self.toggle_play_pause)
+        button_row.addWidget(self.play_pause_btn)
+        
+        button_row.addStretch()
+        controls_layout.addLayout(button_row)
+        
+        layout.addWidget(self.video_controls_panel)
+        
+        # Initialize media player
+        self.media_player = QMediaPlayer()
+        self.audio_output = QAudioOutput()
+        self.media_player.setAudioOutput(self.audio_output)
+        self.media_player.setVideoOutput(self.video_widget)
+        
+        # Connect media player signals
+        self.media_player.positionChanged.connect(self.on_position_changed)
+        self.media_player.durationChanged.connect(self.on_duration_changed)
         
         self.content_splitter.addWidget(self.media_container)
 
@@ -632,6 +746,23 @@ class SorterView(QWidget):
     # Image handling and zoom
     # ---------------------------------------------------------------------
     def display_image(self, pixmap):
+        self.current_media_type = 'image'
+        
+        # Stop video playback if active
+        if self.media_player and self.media_player.playbackState() == QMediaPlayer.PlaybackState.PlayingState:
+            self.media_player.stop()
+            
+        # Ensure video widgets are hidden
+        if self.video_widget:
+            self.video_widget.hide()
+        if self.video_controls_panel:
+            self.video_controls_panel.hide()
+            
+        # Show image view and controls
+        self.view.show()
+        self.zoom_in_btn.show()
+        self.zoom_out_btn.show()
+        
         self.scene.clear()
         if pixmap and not pixmap.isNull():
             self.scene.addPixmap(pixmap)
@@ -679,6 +810,91 @@ class SorterView(QWidget):
         if self.zoom_level == 1.0 and hasattr(self, 'view') and hasattr(self, 'scene') and self.scene.items():
             self.view.fitInView(self.scene.sceneRect(), Qt.AspectRatioMode.KeepAspectRatio)
             self.view.centerOn(self.scene.sceneRect().center())
+
+    # ---------------------------------------------------------------------
+    # Video playback methods
+    # ---------------------------------------------------------------------
+    def is_video_file(self, file_path):
+        """Check if file is a video format."""
+        video_extensions = {'.mp4', '.mov', '.gif', '.avi', '.3gp', '.mkv', '.webm', '.flv', '.wmv'}
+        return Path(file_path).suffix.lower() in video_extensions
+    
+    def display_video(self, file_path):
+        """Load and display a video file."""
+        self.current_media_type = 'video'
+        
+        # Hide image view, show video view
+        self.view.hide()
+        self.video_widget.show()
+        self.video_controls_panel.show()
+        
+        # Hide zoom controls for videos
+        self.zoom_in_btn.hide()
+        self.zoom_out_btn.hide()
+        
+        # Stop any current playback
+        self.media_player.stop()
+        
+        # Load video
+        self.media_player.setSource(QUrl.fromLocalFile(str(file_path)))
+        
+        # Reset controls
+        self.play_pause_btn.setText("▶")
+        self.current_time_label.setText("0:00")
+        self.duration_label.setText("0:00")
+        self.timeline_slider.setValue(0)
+    
+    def toggle_play_pause(self):
+        """Toggle between play and pause states."""
+        if self.media_player.playbackState() == QMediaPlayer.PlaybackState.PlayingState:
+            self.media_player.pause()
+            self.play_pause_btn.setText("▶")
+        else:
+            self.media_player.play()
+            self.play_pause_btn.setText("⏸")
+    
+    def on_position_changed(self, position):
+        """Update timeline and current time when video position changes."""
+        # Prevent slider update loop
+        if not self.timeline_slider.isSliderDown():
+            self.timeline_slider.setValue(position)
+        
+        # Update current time label
+        self.current_time_label.setText(self.format_time(position))
+    
+    def on_duration_changed(self, duration):
+        """Update duration label and slider range when video duration is known."""
+        self.timeline_slider.setRange(0, duration)
+        self.duration_label.setText(self.format_time(duration))
+    
+    def on_slider_moved(self, position):
+        """Seek to position when user drags the timeline slider."""
+        self.media_player.setPosition(position)
+    
+    def format_time(self, milliseconds):
+        """Convert milliseconds to MM:SS format."""
+        seconds = milliseconds // 1000
+        minutes = seconds // 60
+        seconds = seconds % 60
+        return f"{minutes}:{seconds:02d}"
+    
+    def switch_to_image_view(self):
+        """Switch display to image view."""
+        self.current_media_type = 'image'
+        
+        # Stop video playback
+        if self.media_player:
+            self.media_player.stop()
+        
+        # Show image view, hide video view
+        self.video_widget.hide()
+        self.video_controls_panel.hide()
+        self.view.show()
+        
+        # Show zoom controls for images
+        self.zoom_in_btn.show()
+        self.zoom_out_btn.show()
+
 
     # ---------------------------------------------------------------------
     # EXIF edit handling (placeholders)
@@ -829,17 +1045,38 @@ class SorterView(QWidget):
     # ---------------------------------------------------------------------
     # Media loading and file operations (basic implementations)
     # ---------------------------------------------------------------------
-    def on_media_loaded(self, file_path: str):
+    def on_media_loaded(self, file_path: str, pixmap: QPixmap = None):
         """Handle the signal when a new media file is loaded.
-        Loads the image and updates the file info label and EXIF data.
+        Loads the image/video and updates the file info label and EXIF data.
         """
-        pixmap = QPixmap(file_path)
-        self.display_image(pixmap)
-        
-        # Update Icon
-        icon_path = Path(__file__).parent.parent / "assets" / "icons" / "image_blue.svg"
-        if icon_path.exists():
-            self.file_icon_label.setPixmap(QPixmap(str(icon_path)).scaled(20, 20, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation))
+        # Check if it's a video file
+        if self.is_video_file(file_path):
+            self.display_video(file_path)
+            
+            # Update Icon for video
+            icon_path = Path(__file__).parent.parent / "assets" / "icons" / "video.svg"
+            if icon_path.exists():
+                self.file_icon_label.setPixmap(QPixmap(str(icon_path)).scaled(20, 20, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation))
+            
+            # For video, we don't have dimensions from pixmap
+            size_mb = Path(file_path).stat().st_size / (1024 * 1024)
+            self.file_meta_label.setText(f"• {size_mb:.1f} MB • Video")
+            
+        else:
+            # It's an image
+            if pixmap is None:
+                pixmap = QPixmap(file_path)
+            
+            self.display_image(pixmap)
+            
+            # Update Icon for image
+            icon_path = Path(__file__).parent.parent / "assets" / "icons" / "image_blue.svg"
+            if icon_path.exists():
+                self.file_icon_label.setPixmap(QPixmap(str(icon_path)).scaled(20, 20, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation))
+            
+            size_mb = Path(file_path).stat().st_size / (1024 * 1024)
+            dimensions = f"{pixmap.width()}x{pixmap.height()}" if not pixmap.isNull() else "Unknown"
+            self.file_meta_label.setText(f"• {size_mb:.1f} MB • {dimensions}")
         
         file_name = Path(file_path).name
         
@@ -849,12 +1086,6 @@ class SorterView(QWidget):
             display_name = file_name[:27] + "..."
             
         self.file_name_label.setText(display_name)
-        
-        size_mb = Path(file_path).stat().st_size / (1024 * 1024)
-        dimensions = f"{pixmap.width()}x{pixmap.height()}" if not pixmap.isNull() else "Unknown"
-        
-        # Format: • 4.2 MB • 4032x3024
-        self.file_meta_label.setText(f"• {size_mb:.1f} MB • {dimensions}")
         
         # Check if file supports EXIF
         self.current_file_supports_exif = self.exif_manager.supports_exif(file_path)
@@ -1004,6 +1235,11 @@ class SorterView(QWidget):
             while target_path.exists():
                 target_path = target_dir / f"{base}_{counter}{suffix}"
                 counter += 1
+
+        # Release file lock if it's a video being played
+        if self.media_player and self.current_media_type == 'video':
+            self.media_player.stop()
+            self.media_player.setSource(QUrl())
 
         try:
             shutil.move(str(current_file_path), str(target_path))
