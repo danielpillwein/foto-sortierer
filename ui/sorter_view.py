@@ -13,6 +13,7 @@ import shutil
 from ui.components.breadcrumb_bar import BreadcrumbBar
 from ui.components.shortcut_folder_panel import ShortcutFolderPanel
 from ui.components.stats_popup import StatsPopup
+from ui.components.completion_popup import CompletionPopup
 
 class SorterView(QWidget):
     """Main Sorter View Interface - 1:1 Mockup Implementation"""
@@ -932,6 +933,11 @@ class SorterView(QWidget):
                     
                     processed = sorted_count + deleted_count
                     self.update_progress(processed, initial_count)
+            
+            # Check for completion
+            if not self.files:
+                self.show_completion_popup()
+                return
 
     def create_new_folder_dialog(self):
         """Opens a dialog to create a new folder in the target directory."""
@@ -1023,6 +1029,11 @@ class SorterView(QWidget):
                     
                     processed = sorted_count + deleted_count
                     self.update_progress(processed, initial_count)
+                    
+                    # Check for completion
+                    if not self.files:
+                        self.show_completion_popup()
+                        return
             
             # Load next file (index stays same because we popped the current one)
             # But if we were at the last item, we need to adjust
@@ -1143,3 +1154,160 @@ class SorterView(QWidget):
         
         # Show popup
         popup.show()
+
+    def show_completion_popup(self):
+        """Show a completion message when all files have been processed."""
+        if not self.current_session_id:
+            return
+            
+        session = self.session_manager.sessions.get(self.current_session_id)
+        if not session:
+            return
+        
+        # Create dark overlay
+        overlay = QWidget(self)
+        overlay.setStyleSheet("background-color: rgba(0, 0, 0, 0.6);")
+        overlay.setGeometry(self.rect())
+        overlay.show()
+        
+        # Create and show custom completion popup
+        popup = CompletionPopup(session, self)
+        
+        # Connect signals
+        popup.close_requested.connect(self.close_session_clicked.emit)
+        popup.open_source_requested.connect(lambda: self.open_folder('source'))
+        popup.open_target_requested.connect(lambda: self.open_folder('target'))
+        popup.show_deleted_requested.connect(self.show_deleted_files)
+        popup.perm_delete_requested.connect(self.permanently_delete_files)
+        
+        # Show popup first to get its actual size
+        popup.show()
+        
+        # Center popup on main window using actual dimensions
+        parent_geometry = self.window().geometry()
+        popup_x = parent_geometry.x() + (parent_geometry.width() - popup.width()) // 2
+        popup_y = parent_geometry.y() + (parent_geometry.height() - popup.height()) // 2
+        popup.move(popup_x, popup_y)
+        
+        # Hide and exec as modal dialog
+        popup.hide()
+        popup.exec()
+        
+        # Remove overlay after popup closes
+        overlay.deleteLater()
+    
+    def open_folder(self, folder_type):
+        """Open source or target folder in file explorer."""
+        if not self.current_session_id:
+            return
+            
+        session = self.session_manager.sessions.get(self.current_session_id)
+        if not session:
+            return
+        
+        # Determine which folder to open
+        if folder_type == 'source':
+            folder_path = Path(session.get('source_path', ''))
+            folder_name = "Quellordner"
+        else:  # target
+            folder_path = Path(session.get('target_path', ''))
+            folder_name = "Zielordner"
+        
+        if not folder_path.exists():
+            QMessageBox.warning(
+                self,
+                "Ordner nicht gefunden",
+                f"Der {folder_name} existiert nicht mehr."
+            )
+            return
+        
+        # Open folder in file explorer
+        import subprocess
+        try:
+            subprocess.run(['explorer', str(folder_path)])
+        except Exception as e:
+            QMessageBox.critical(
+                self,
+                "Fehler beim Öffnen",
+                f"Der {folder_name} konnte nicht geöffnet werden:\n{str(e)}"
+            )
+    
+    def show_deleted_files(self):
+        """Open the deleted files folder in file explorer."""
+        if not self.current_session_id:
+            return
+        
+        # Deleted files are stored in ~/Foto-Sortierer/gelöscht_{session_id}
+        deleted_folder = Path(os.path.expanduser(f"~/Foto-Sortierer/gelöscht_{self.current_session_id}"))
+        
+        if not deleted_folder.exists():
+            QMessageBox.information(
+                self,
+                "Keine gelöschten Dateien",
+                "Es wurden noch keine Dateien gelöscht."
+            )
+            return
+        
+        # Open folder in file explorer
+        import subprocess
+        try:
+            subprocess.run(['explorer', str(deleted_folder)])
+        except Exception as e:
+            QMessageBox.critical(
+                self,
+                "Fehler beim Öffnen",
+                f"Der Ordner konnte nicht geöffnet werden:\n{str(e)}"
+            )
+    
+    def permanently_delete_files(self):
+        """Permanently delete all deleted files after confirmation."""
+        if not self.current_session_id:
+            return
+        
+        # Deleted files are stored in ~/Foto-Sortierer/gelöscht_{session_id}
+        deleted_folder = Path(os.path.expanduser(f"~/Foto-Sortierer/gelöscht_{self.current_session_id}"))
+        
+        if not deleted_folder.exists():
+            QMessageBox.information(
+                self,
+                "Keine gelöschten Dateien",
+                "Es wurden noch keine Dateien gelöscht."
+            )
+            return
+        
+        # Count files
+        file_count = sum(1 for _ in deleted_folder.rglob("*") if _.is_file())
+        
+        # Confirmation dialog with German buttons
+        msg_box = QMessageBox(self)
+        msg_box.setWindowTitle("Gelöschte Dateien endgültig löschen?")
+        msg_box.setIcon(QMessageBox.Icon.Question)
+        msg_box.setText(f"Möchtest du wirklich alle {file_count} gelöschten Dateien unwiderruflich löschen?")
+        msg_box.setInformativeText("Diese Aktion kann nicht rückgängig gemacht werden!")
+        
+        # Create custom German buttons
+        ja_button = msg_box.addButton('Ja', QMessageBox.ButtonRole.YesRole)
+        nein_button = msg_box.addButton('Nein', QMessageBox.ButtonRole.NoRole)
+        msg_box.setDefaultButton(nein_button)
+        
+        msg_box.exec()
+        
+        if msg_box.clickedButton() == ja_button:
+            try:
+                shutil.rmtree(deleted_folder)
+                
+                # Do NOT update session stats - keep them as they are
+                
+                QMessageBox.information(
+                    self,
+                    "Erfolgreich gelöscht",
+                    f"Alle {file_count} gelöschten Dateien wurden endgültig gelöscht."
+                )
+            except Exception as e:
+                QMessageBox.critical(
+                    self,
+                    "Fehler beim Löschen",
+                    f"Die Dateien konnten nicht gelöscht werden:\n{str(e)}"
+                )
+
+

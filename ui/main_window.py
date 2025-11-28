@@ -51,6 +51,13 @@ class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("FotoSortierer")
+        
+        # Set application icon
+        from PyQt6.QtGui import QIcon
+        icon_path = Path("assets/icons/app-icon.png")
+        if icon_path.exists():
+            self.setWindowIcon(QIcon(str(icon_path)))
+        
         self.resize(1280, 800)
         
         # Managers

@@ -312,25 +312,41 @@ class StartScreen(QWidget):
         action_layout = QHBoxLayout()
         action_layout.setSpacing(10)
         
-        btn_text = "Öffnen" if progress_val == 100 else "Fortsetzen"
-        action_btn = QPushButton(btn_text)
-        action_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        action_btn.setFixedHeight(36)
-        action_btn.setStyleSheet("""
-            QPushButton {
-                background-color: #1A1A1C;
-                color: #E0E0E0;
-                border: 1px solid #333;
-                border-radius: 4px;
-                font-weight: bold;
-                font-size: 13px;
-            }
-            QPushButton:hover { 
-                background-color: #252527; 
-                border: 1px solid #444;
-            }
-        """)
-        action_btn.clicked.connect(lambda: self.resume_session_clicked.emit(session["id"]))
+        if progress_val == 100:
+            # Static text "Fertig sortiert"
+            action_btn = QLabel("Fertig sortiert")
+            action_btn.setFixedHeight(36)
+            action_btn.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            action_btn.setStyleSheet("""
+                QLabel {
+                    color: #22C55E;
+                    font-weight: bold;
+                    font-size: 13px;
+                    border: none;
+                    background: transparent;
+                    padding: 0 8px;
+                }
+            """)
+        else:
+            # Resume button
+            action_btn = QPushButton("Fortsetzen")
+            action_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+            action_btn.setFixedHeight(36)
+            action_btn.setStyleSheet("""
+                QPushButton {
+                    background-color: #1A1A1C;
+                    color: #E0E0E0;
+                    border: 1px solid #333;
+                    border-radius: 4px;
+                    font-weight: bold;
+                    font-size: 13px;
+                }
+                QPushButton:hover { 
+                    background-color: #252527; 
+                    border: 1px solid #444;
+                }
+            """)
+            action_btn.clicked.connect(lambda: self.resume_session_clicked.emit(session["id"]))
         
         stats_btn = QPushButton()
         stats_btn.setIcon(QIcon("assets/icons/bar_chart.svg"))
