@@ -10,7 +10,10 @@ from core.duplicate_detector import DuplicateDetector
 from core.media_loader import MediaLoader
 from core.exif_manager import ExifManager
 from pathlib import Path
+
+
 import glob
+from utils.path_utils import resource_path
 
 class DuplicateScanThread(QThread):
     progress_update = pyqtSignal(int, int, int, int, str) # current, total, deleted, review, status
@@ -54,7 +57,7 @@ class MainWindow(QMainWindow):
         
         # Set application icon
         from PyQt6.QtGui import QIcon
-        icon_path = Path("assets/icons/app-icon.png")
+        icon_path = Path(resource_path("assets/icons/app-icon.png"))
         if icon_path.exists():
             self.setWindowIcon(QIcon(str(icon_path)))
         
@@ -88,7 +91,7 @@ class MainWindow(QMainWindow):
         self.init_screens()
 
     def load_stylesheet(self):
-        style_path = Path("assets/style.qss")
+        style_path = Path(resource_path("assets/style.qss"))
         if style_path.exists():
             with open(style_path, "r") as f:
                 self.setStyleSheet(f.read())

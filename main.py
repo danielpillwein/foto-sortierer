@@ -3,6 +3,9 @@ from PyQt6.QtWidgets import QApplication
 from ui.main_window import MainWindow
 from core.logger import setup_logger
 
+
+
+
 def main():
     # Setup Logging
     logger = setup_logger()

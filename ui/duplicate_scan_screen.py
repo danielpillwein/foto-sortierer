@@ -3,7 +3,9 @@ from PyQt6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel,
 from PyQt6.QtCore import Qt, pyqtSignal, QTimer, QTime
 from PyQt6.QtGui import QIcon
 from pathlib import Path
+
 import time
+from utils.path_utils import resource_path
 
 class DuplicateScanScreen(QWidget):
     scan_completed = pyqtSignal(list)
@@ -26,7 +28,7 @@ class DuplicateScanScreen(QWidget):
         self.init_ui()
         
     def load_stylesheet(self):
-        style_path = Path("assets/style.qss")
+        style_path = Path(resource_path("assets/style.qss"))
         if style_path.exists():
             with open(style_path, "r") as f:
                 self.setStyleSheet(f.read())
@@ -70,7 +72,7 @@ class DuplicateScanScreen(QWidget):
         
         # Load SVG icon
         icon_label = QLabel(icon_container)
-        icon_pixmap = QIcon("assets/icons/search.svg").pixmap(48, 48)
+        icon_pixmap = QIcon(resource_path("assets/icons/search.svg")).pixmap(48, 48)
         icon_label.setPixmap(icon_pixmap)
         icon_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         icon_label.setStyleSheet("background: transparent; border: none;")

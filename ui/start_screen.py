@@ -4,6 +4,7 @@ from PyQt6.QtCore import Qt, pyqtSignal, QSize
 from PyQt6.QtGui import QIcon
 from datetime import datetime
 import subprocess
+from utils.path_utils import resource_path
 import os
 from pathlib import Path
 
@@ -219,7 +220,7 @@ class StartScreen(QWidget):
         name_label.setStyleSheet("font-size: 15px; font-weight: bold; color: #FFFFFF; border: none; background: transparent;")
         
         delete_btn = QPushButton()
-        delete_btn.setIcon(QIcon("assets/icons/trash.svg"))
+        delete_btn.setIcon(QIcon(resource_path("assets/icons/trash.svg")))
         delete_btn.setIconSize(QSize(16, 16))
         delete_btn.setFixedSize(24, 24)
         delete_btn.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -249,7 +250,7 @@ class StartScreen(QWidget):
         media_row = QHBoxLayout()
         media_row.setSpacing(8)
         media_icon = QLabel()
-        media_icon.setPixmap(QIcon("assets/icons/image.svg").pixmap(16, 16))
+        media_icon.setPixmap(QIcon(resource_path("assets/icons/image.svg")).pixmap(16, 16))
         media_icon.setStyleSheet("border: none; background: transparent;")
         
         media_text = QLabel(f"{session.get('initial_filecount', 0)} Medien")
@@ -264,7 +265,7 @@ class StartScreen(QWidget):
         prog_row = QHBoxLayout()
         prog_row.setSpacing(8)
         prog_icon = QLabel()
-        prog_icon.setPixmap(QIcon("assets/icons/chart.svg").pixmap(16, 16))
+        prog_icon.setPixmap(QIcon(resource_path("assets/icons/chart.svg")).pixmap(16, 16))
         prog_icon.setStyleSheet("border: none; background: transparent;")
         
         # Calculate progress: (sorted + deleted) / initial
@@ -349,7 +350,7 @@ class StartScreen(QWidget):
             action_btn.clicked.connect(lambda: self.resume_session_clicked.emit(session["id"]))
         
         stats_btn = QPushButton()
-        stats_btn.setIcon(QIcon("assets/icons/bar_chart.svg"))
+        stats_btn.setIcon(QIcon(resource_path("assets/icons/bar_chart.svg")))
         stats_btn.setIconSize(QSize(18, 18))
         stats_btn.setFixedSize(36, 36)
         stats_btn.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -368,7 +369,7 @@ class StartScreen(QWidget):
         
         # Target folder button
         target_btn = QPushButton("Ziel")
-        target_btn.setIcon(QIcon("assets/icons/folder_outline.svg"))
+        target_btn.setIcon(QIcon(resource_path("assets/icons/folder_outline.svg")))
         target_btn.setIconSize(QSize(16, 16))
         target_btn.setFixedHeight(36)
         target_btn.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -392,7 +393,7 @@ class StartScreen(QWidget):
         
         # Deleted files button
         deleted_btn = QPushButton("Gelöscht")
-        deleted_btn.setIcon(QIcon("assets/icons/archive.svg"))
+        deleted_btn.setIcon(QIcon(resource_path("assets/icons/archive.svg")))
         deleted_btn.setIconSize(QSize(16, 16))
         deleted_btn.setFixedHeight(36)
         deleted_btn.setCursor(Qt.CursorShape.PointingHandCursor)

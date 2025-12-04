@@ -9,6 +9,7 @@ from PyQt6.QtMultimedia import QMediaPlayer, QAudioOutput
 from PyQt6.QtMultimediaWidgets import QVideoWidget
 from pathlib import Path
 import os
+from utils.path_utils import resource_path
 import shutil
 
 # Import breadcrumb navigation components

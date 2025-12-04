@@ -3,6 +3,8 @@ from PyQt6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel,
 from PyQt6.QtCore import Qt, pyqtSignal, QSize, QByteArray, QTimer
 from PyQt6.QtGui import QPixmap, QIcon, QKeySequence, QShortcut, QMovie
 from pathlib import Path
+from utils.path_utils import resource_path
+
 
 class DuplicateReviewScreen(QWidget):
     keep_left = pyqtSignal()
@@ -17,7 +19,7 @@ class DuplicateReviewScreen(QWidget):
         self.init_ui()
         
     def load_stylesheet(self):
-        style_path = Path("assets/style.qss")
+        style_path = Path(resource_path("assets/style.qss"))
         if style_path.exists():
             with open(style_path, "r") as f:
                 self.setStyleSheet(f.read())
@@ -142,7 +144,7 @@ class DuplicateReviewScreen(QWidget):
         # Icon
         icon_label = QLabel()
         icon_label.setStyleSheet("background: transparent; border: none;")
-        icon_path = Path(f"assets/icons/{icon_name}")
+        icon_path = Path(resource_path("assets/icons/{icon_name}"))
         if icon_path.exists():
             pixmap = QPixmap(str(icon_path))
             icon_label.setPixmap(pixmap.scaled(20, 20, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation))

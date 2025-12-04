@@ -3,6 +3,8 @@ from PyQt6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel,
 from PyQt6.QtCore import Qt, pyqtSignal, QSize
 from PyQt6.QtGui import QIcon
 from pathlib import Path
+from utils.path_utils import resource_path
+
 
 class NewSessionScreen(QWidget):
     back_clicked = pyqtSignal()
@@ -14,7 +16,7 @@ class NewSessionScreen(QWidget):
         self.init_ui()
 
     def load_stylesheet(self):
-        style_path = Path("assets/style.qss")
+        style_path = Path(resource_path("assets/style.qss"))
         if style_path.exists():
             with open(style_path, "r") as f:
                 self.setStyleSheet(f.read())
@@ -54,7 +56,7 @@ class NewSessionScreen(QWidget):
         header_layout.setSpacing(15)
 
         back_btn = QPushButton()
-        back_btn.setIcon(QIcon("assets/icons/arrow_left.svg"))
+        back_btn.setIcon(QIcon(resource_path("assets/icons/arrow_left.svg")))
         back_btn.setIconSize(QSize(24, 24))
         back_btn.setFixedSize(30, 30)
         back_btn.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -206,7 +208,7 @@ class NewSessionScreen(QWidget):
         
         info_title_row = QHBoxLayout()
         info_icon = QLabel()
-        info_icon.setPixmap(QIcon("assets/icons/info.svg").pixmap(20, 20))
+        info_icon.setPixmap(QIcon(resource_path("assets/icons/info.svg")).pixmap(20, 20))
         info_icon.setStyleSheet("border: none; background: transparent;")
         
         info_title = QLabel("Hinweise zur Session-Erstellung:")
@@ -369,7 +371,7 @@ class NewSessionScreen(QWidget):
 
     def create_folder_button(self, text):
         btn = QPushButton(f"  {text}")
-        btn.setIcon(QIcon("assets/icons/folder.svg"))
+        btn.setIcon(QIcon(resource_path("assets/icons/folder.svg")))
         btn.setFixedSize(140, 42)
         btn.setCursor(Qt.CursorShape.PointingHandCursor)
         btn.setStyleSheet("""
